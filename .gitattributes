@@ -1,0 +1,11 @@
+# Everything here is written with LF and read by tools that expect LF -- the Rust
+# sources, the Python analysis scripts, and the generated .ini files the kit writes.
+# Normalising on checkout would rewrite them to CRLF and make every file look modified.
+* text=auto eol=lf
+
+# Nothing in this repository is binary today, but say so for the shapes that turn up
+# around a mod: patched executables, packaged releases, extracted content.
+*.exe   binary
+*.dll   binary
+*.zip   binary
+*.pickle binary
