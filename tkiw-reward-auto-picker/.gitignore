@@ -1,0 +1,22 @@
+# build output
+/target/
+
+# regenerable analysis caches (seconds to rebuild, megabytes to store)
+/analysis/*.pickle
+/analysis/__pycache__/
+
+# whoever ran it -- never commit, never ship. These carry absolute paths,
+# usernames, and the contents of a real save.
+/config.ini
+/config.reference.ini
+/picker.log
+/picker.log.*
+/crash.log
+/probe.incomplete
+__pycache__/
+
+# built packages
+/dist/
+
+# save snapshots (yours, not the repo's)
+/save-backups/

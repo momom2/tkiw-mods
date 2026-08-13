@@ -1,0 +1,22 @@
+﻿[workspace]
+resolver = "2"
+members = ["tkiw-runtime", "tkiw-momomod-kit", "tkiw-reward-auto-picker"]
+
+# Every mod in the repository is a member and depends on `tkiw-runtime`, so one
+# `cargo test` from here covers all of them and a fix to the shared layer is proven
+# against every consumer at once.
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+
+[profile.release]
+opt-level = 2
+# panic = "unwind" (the default) is required, not incidental: the frame hook and
+# every call into a feature catch panics, so a fault in the mod disables that
+# feature instead of killing someone's run. "abort" would turn each of those
+# into a crash.
+panic = "unwind"
+strip = false
+
+

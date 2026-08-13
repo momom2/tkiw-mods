@@ -1,0 +1,4 @@
+# Static CRT: the DLL is loaded into someone else's process, and depending on a
+# redistributable the player may not have is a support burden for no benefit.
+[build]
+rustflags = ["-C", "target-feature=+crt-static"]

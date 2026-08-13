@@ -1,0 +1,38 @@
+[package]
+name = "tkiw_reward_picker"
+version = "0.1.1"
+edition = "2021"
+description = "Config-driven auto reward picker for The King is Watching"
+
+[lib]
+name = "tkiw_reward_picker"
+# rlib only. This crate used to build its own `version.dll`; it is now absorbed
+# into TKIW's momomod Kit, which supplies the DLL, the frame hook and the log, and
+# links this as a library. Two `DllMain`s in one DLL do not link, so the standalone
+# entry points are behind the `standalone` feature and nothing enables it.
+#
+# An already-installed `version.dll` from before the absorption keeps working: it
+# takes a named claim, and the hosted copy yields to it. See `claim.rs`.
+crate-type = ["rlib"]
+
+[features]
+# The standalone DLL entry points: `DllMain`, the proxy forwarders, and the crash
+# breadcrumb the kit now provides. Kept compiling so the old shape stays reviewable,
+# but off -- turning it on in a build that also links this into another DLL gives
+# LNK1169 (DllMain defined twice), which is the point rather than a bug.
+#
+# To check it still compiles, on its own where nothing links it:
+#     cargo check -p tkiw_reward_picker --features standalone
+standalone = []
+
+[dependencies]
+# The shared injection and game-reading layer. Was fourteen duplicated files here;
+# a fix to the region cache or the crash reporter now lands once, for every mod.
+# Still no third-party crates: this is a path dependency inside the repository, so the
+# build remains offline and reproducible with nothing but rustup.
+tkiw_runtime = { path = "../tkiw-runtime" }
+
+# The release profile lives at the workspace root now. Cargo ignores a `[profile]` in
+# a non-root member and warns about it, and having it in two places invites them
+# disagreeing -- `panic = "unwind"` in particular is load-bearing, not cosmetic: the
+# hook boundary catches panics so a fault disables the mod instead of killing a run.

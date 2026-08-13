@@ -1,0 +1,12 @@
+[package]
+name = "tkiw_runtime"
+description = "Shared injection and game-reading layer for The King is Watching mods"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "tkiw_runtime"
+
+# No dependencies, deliberately: the FFI surface is small enough that
+# dependency-free keeps the build offline and reproducible with nothing but
+# rustup, and a mod that ships to strangers is better off with no supply chain.

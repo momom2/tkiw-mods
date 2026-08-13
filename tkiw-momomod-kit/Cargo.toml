@@ -1,0 +1,19 @@
+[package]
+name = "momomod_kit"
+description = "TKIW's momomod Kit: quality-of-life fixes, bug fixes and optimisations for The King is Watching"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "momomod_kit"
+# rlib alongside cdylib so the feature registry, the config parser and the
+# signature guards can be unit-tested against a real game executable without
+# going near the game process.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+tkiw_runtime = { path = "../tkiw-runtime" }
+# The auto-picker, absorbed as a mod. Linked rather than copied: the crate
+# already builds as an rlib, so the kit drives its logic and provides the
+# lifecycle (frame hook, re-entry guard, panic boundary, budget) itself.
+tkiw_reward_picker = { path = "../tkiw-reward-auto-picker" }
