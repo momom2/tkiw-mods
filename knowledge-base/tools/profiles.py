@@ -26,6 +26,22 @@ ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
 PROFILES = os.path.join(ROOT, "tkiw-momomod-kit", "profiles")
 
 
+# Runs written before the profiler learned to apply its own name table recorded raw
+# addresses in the `self` column while the log said "ogg/vorbis decode". Grouping by
+# name would then split one function across two labels and halve both.
+#
+# The authoritative table is KNOWN in tkiw-momomod-kit/src/features/profiler.rs; this
+# only has to cover names that appear in CSVs already on disk.
+ALIASES = {
+    "sub_1c9fd30": "ogg/vorbis decode",
+    "sub_1c9fb28": "ogg/vorbis decode",
+    "sub_1ca3ab0": "ogg page checksum",
+    "sub_1ea5cc0": "memset",
+    "sub_1b54600": "string table lookup (linear)",
+    "sub_1c09667": "qoi image decode",
+}
+
+
 def load(path):
     """{(phase, kind, name): share of that phase's samples} for one run."""
     out = {}
@@ -38,7 +54,11 @@ def load(path):
                 continue
             if total <= 0:
                 continue
-            out[(row["phase"], row["kind"], row["name"])] = 100.0 * n / total
+            name = ALIASES.get(row["name"], row["name"])
+            key = (row["phase"], row["kind"], name)
+            # An alias can merge two rows -- a range and its parent both map to one
+            # name -- so accumulate rather than assign.
+            out[key] = out.get(key, 0.0) + 100.0 * n / total
     return out
 
 

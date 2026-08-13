@@ -205,3 +205,38 @@ benefit from troop upgrades" was real, reproducible, and not a bug: Griffins are
 rider+flying, and the reporter's training was ~130 in ranged/arcane and ~0.15 in
 everything else — because the auto-picker had been configured to pick exactly those two.
 The observation was correct and the diagnosis was in the config, not the game.
+
+## The profiler can crash the game, and did
+
+Sampling suspends and resumes the game's thread at the configured interval. At the
+default 1ms that is about a thousand stop/starts a second, and it is enough to break
+the game's font loading:
+
+```
+Font "fnt_hr_semibold_12_outlined_2px" already exists
+gml_Script_scribble_font_duplicate
+gml_Script_generate_fonts
+gml_Script_anon@169@gml_Object_obj_init_Alarm_0
+gml_Object_obj_font_tex_control_Step_0
+```
+
+`obj_font_tex_control_Step_0` is a state machine polling for a texture group to finish
+loading; when it sees the group loaded it sets `state` and invokes `on_loaded_callback`,
+which is what runs `generate_fonts`. Slow the main thread down enough and that callback
+runs twice. `generate_fonts` is 62 KB of straight-line code with no guard against a
+second entry, so Scribble raises on the duplicate.
+
+The suspend/resume discipline in `sample.rs` is not the problem -- `ResumeThread` always
+runs and the only early return is when the suspend never took. It is the perturbation
+itself.
+
+Two consequences, both now in the code:
+
+* The profiler stops itself after `stop_after_s` (120 by default). "Remember to switch
+  it off" is not a safety mechanism; it failed, on a player's own machine.
+* `measure-startup.py` restores the config and reinstalls at the end of every run. It
+  used to leave the measuring config in place, which is how a player came to launch a
+  game with everything switched off and a profiler suspending their thread.
+
+**Never leave a measurement configuration installed.** The player's next launch is not
+your measurement.

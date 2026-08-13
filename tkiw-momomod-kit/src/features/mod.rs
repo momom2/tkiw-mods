@@ -174,7 +174,9 @@ fn extra_keys(name: &str) -> &'static str {
              # Rows per table. 25 to read, more to analyse.\n\
              top = 25\n\
              # Also report how much was sampled during a hitch.\n\
-             stalls = true\n"
+             stalls = true\n\
+             # Stop sampling after this many seconds. 0 never stops.\n\
+             stop_after_s = 120\n"
         }
         _ => "",
     }

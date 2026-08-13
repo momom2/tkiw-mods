@@ -161,12 +161,25 @@ pub struct Profiler {
     interval: Duration,
     top: usize,
     stalls: bool,
+    /// Sampling stops itself after this. Zero means never, which is a choice a player
+    /// has to make deliberately rather than one they can be left in.
+    stop_after: Duration,
     stop: Option<Arc<AtomicBool>>,
 }
 
 impl Default for Profiler {
     fn default() -> Profiler {
-        Profiler { interval: Duration::from_millis(1), top: 25, stalls: true, stop: None }
+        Profiler {
+            interval: Duration::from_millis(1),
+            top: 25,
+            stalls: true,
+            // Long enough for a startup and a look at the menu, short enough that a
+            // profiler left switched on is not a profiler running all evening. This
+            // exists because one was left on, and the game raised "font already exists"
+            // out of a load callback that fired twice.
+            stop_after: Duration::from_secs(120),
+            stop: None,
+        }
     }
 }
 
@@ -217,8 +230,9 @@ impl Feature for Profiler {
     }
 
     fn summary(&self) -> &'static str {
-        "Samples the game and reports where its time goes, per phase of a launch or a \
-         run. Changes nothing about the game; costs a thread. For measurement sessions."
+        "Reports where the game's time goes. Do not play with this on: it stops and \
+         restarts the game's thread a thousand times a second, which has crashed the \
+         game's font loading. It stops by itself after stop_after_s."
     }
 
     fn requires(&self) -> Requirements {
@@ -239,7 +253,8 @@ impl Feature for Profiler {
         self.top = top as usize;
 
         self.stalls = section.bool("stalls", true)?;
-        for k in section.unknown(&["enabled", "interval_ms", "top", "stalls"]) {
+        self.stop_after = Duration::from_secs(section.u64("stop_after_s", 120)?);
+        for k in section.unknown(&["enabled", "interval_ms", "top", "stalls", "stop_after_s"]) {
             logln!("[profiler] config: unknown key {k:?} - ignored");
         }
         Ok(())
@@ -263,12 +278,13 @@ impl Feature for Profiler {
         let interval = self.interval;
         let top = self.top;
         let stalls = self.stalls;
+        let stop_after = self.stop_after;
 
         let stop = Arc::new(AtomicBool::new(false));
         self.stop = Some(stop.clone());
         std::thread::Builder::new()
             .name("momomod-profiler".into())
-            .spawn(move || run(base, symbolizer, interval, top, stalls, stop))
+            .spawn(move || run(base, symbolizer, interval, top, stalls, stop_after, stop))
             .map_err(|e| format!("could not start the sampling thread: {e}"))?;
 
         logln!(
@@ -305,6 +321,7 @@ fn run(
     interval: Duration,
     top: usize,
     stalls: bool,
+    stop_after: Duration,
     stop: Arc<AtomicBool>,
 ) {
     // Wait for the frame hook to name the game's thread. It arms within a second of the
@@ -347,7 +364,19 @@ fn run(
         logln!("[profiler] this run's samples go to {}", p.display());
     }
 
+    let started = Instant::now();
     while !stop.load(Ordering::Relaxed) {
+        // Stop of our own accord. Suspending the game's thread a thousand times a
+        // second is not a state to leave a game in, and "remember to switch it off" is
+        // not a safety mechanism -- it failed once and the game raised a font error.
+        if !stop_after.is_zero() && started.elapsed() >= stop_after {
+            logln!(
+                "[profiler] stopping after {}s, as configured; the game is left alone \
+                 from here",
+                stop_after.as_secs()
+            );
+            break;
+        }
         std::thread::sleep(interval);
 
         // A stale module list put 37% of one profile into `<unmapped>`.
@@ -580,11 +609,13 @@ fn write_csv(sym: &Symbolizer, _base: usize, buckets: &HashMap<u8, Bucket>, path
             ));
         }
         for (func, count) in &b.self_ {
-            out.push_str(&format!(
-                "{p},self,\"{}\",{count},{}\n",
-                esc(sym.name_of(*func)),
-                b.samples
-            ));
+            // The same naming the log uses. Without this the CSV reported raw addresses
+            // while the log said "ogg/vorbis decode", and reading the two side by side
+            // made a stable finding look like it had vanished.
+            let name = known_name(*func as usize)
+                .map(String::from)
+                .unwrap_or_else(|| sym.name_of(*func));
+            out.push_str(&format!("{p},self,\"{}\",{count},{}\n", esc(name), b.samples));
         }
         for (func, count) in &b.incl {
             out.push_str(&format!(

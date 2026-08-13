@@ -116,6 +116,19 @@ impl Symbolizer {
         for (name, rva) in functions {
             by_rva.insert(*rva, Name::Gml(shorten(name)));
         }
+        // The runtime's builtins, generated from the `Function_Add` walk. Inserted only
+        // where they land on a real `.pdata` boundary: the table is build-specific, and
+        // a stale entry should make a frame anonymous, never mislabelled.
+        //
+        // These are what turn an engine table of `sub_1b1db20` into one that names the
+        // call the game actually made.
+        for (rva, name) in crate::builtins_table::BUILTINS {
+            if let Some(slot) = by_rva.get_mut(rva) {
+                if matches!(slot, Name::Anon(_)) {
+                    *slot = Name::Runtime(name);
+                }
+            }
+        }
         // And a hand-identified runtime routine wins over everything, since it is
         // the only name that will ever exist for it.
         for (rva, name) in RUNTIME_ROUTINES {

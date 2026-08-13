@@ -38,6 +38,9 @@
 
 pub mod breadcrumb;
 pub mod builtin;
+/// Generated: names for the runtime's builtins. See
+/// `knowledge-base/tools/gen_builtin_table.py`.
+pub mod builtins_table;
 pub mod claim;
 pub mod codecave;
 pub mod dslist;

@@ -104,9 +104,11 @@ def apply(keep_on):
 
 def main(argv):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--with", dest="keep", default="",
+    ap.add_argument("--with", dest="patched", default="",
                     help="comma-separated features to leave switched on")
     ap.add_argument("--restore", action="store_true")
+    ap.add_argument("--keep", action="store_true",
+                    help="leave the measuring config in place after the run")
     ap.add_argument("--timeout", type=float, default=200.0)
     args = ap.parse_args(argv)
 
@@ -114,7 +116,7 @@ def main(argv):
         restore()
         return 0
 
-    keep = [f.strip() for f in args.keep.split(",") if f.strip()]
+    keep = [f.strip() for f in args.patched.split(",") if f.strip()]
     unknown = [f for f in keep if f not in PATCHING]
     if unknown:
         print("not a patching feature: %s" % ", ".join(unknown))
@@ -129,9 +131,23 @@ def main(argv):
     subprocess.run([sys.executable, os.path.join(HERE, "playtest.py"),
                     "--log", LOG, "--until", "obj_main_menu",
                     "--timeout", str(args.timeout)])
+
+    # Restore by default, and reinstall, so the game is never left in measuring state.
+    #
+    # It was once, for an hour: everything switched off, the profiler suspending the
+    # game's thread every millisecond, and the player launching to actually play. The
+    # measuring config is for measuring, and leaving it in place is not a thing to
+    # remember to undo -- it is a thing that must undo itself.
+    if not args.keep:
+        restore()
+        subprocess.run([sys.executable, os.path.join(KIT, "install.py")],
+                       capture_output=True, text=True)
+        print("config restored; the game is playable again")
+    else:
+        print("--keep: the measuring config is still in place. Run --restore.")
+
     print("\nlog: %s" % LOG)
-    print("csv: %s" % os.path.join(KIT, "profile.csv"))
-    print("run --restore when done.")
+    print("runs: %s" % os.path.join(KIT, "profiles"))
     return 0
 
 
