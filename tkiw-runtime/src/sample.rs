@@ -51,7 +51,14 @@ use crate::win::{self, Handle};
 
 /// Deepest stack a sample will record. Deeper is more time suspended, and GML call
 /// chains are not deep; the compiled closures nest, but not far.
-pub const MAX_FRAMES: usize = 32;
+/// How deep a stack may be walked.
+///
+/// Sixty-four rather than thirty-two because a truncated stack loses the frame that
+/// explains the sample: the profiler charges work to the innermost *named* GML function
+/// above it, and the library builders nest through helper after helper. A caller that
+/// falls off the end is not merely missing, it is silently attributed elsewhere. The
+/// cost of the higher ceiling is one array of that size per sampling thread.
+pub const MAX_FRAMES: usize = 64;
 
 /// `CONTEXT` for x86-64, as an opaque aligned blob.
 ///

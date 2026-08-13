@@ -144,6 +144,21 @@ impl Symbolizer {
         Site { func: start, offset: rva - start, inside: true }
     }
 
+    /// Whether this function is compiled GML, as opposed to a runtime routine or an
+    /// unnamed `.pdata` entry.
+    ///
+    /// The distinction matters to anything asking "which of the game's own functions is
+    /// responsible for this work". `call_builtin_by_index`, `RValue_release` and the
+    /// rest are named, but naming them is not an answer: every builtin call in the game
+    /// passes through the dispatcher, so it appeared as the responsible frame for 80.6%
+    /// of a startup phase and explained nothing.
+    pub fn is_gml(&self, func: u32) -> bool {
+        match self.entries.binary_search_by(|e| e.0.cmp(&func)) {
+            Ok(i) => matches!(self.entries[i].1, Name::Gml(_)),
+            Err(_) => false,
+        }
+    }
+
     /// The name of a function by its start RVA.
     pub fn name_of(&self, func: u32) -> String {
         if func == 0 {

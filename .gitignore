@@ -41,3 +41,8 @@ tkiw-reward-auto-picker/docs/*.json
 
 # Per-machine tool settings, not project configuration.
 .claude/settings.local.json
+
+# One CSV per profiling launch. Regenerable, and specific to one machine.
+**/profiles/
+**/*.ini.premeasure
+**/profile.csv

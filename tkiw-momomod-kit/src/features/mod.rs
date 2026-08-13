@@ -171,15 +171,10 @@ fn extra_keys(name: &str) -> &'static str {
             "# How often to take a sample, in milliseconds. 1 is about as fine as is\n\
              # useful; larger costs less and needs a longer session to say anything.\n\
              interval_ms = 1\n\
-             # Write a report this often, in seconds, then start counting afresh.\n\
-             # Shorter reports make it easier to line a slowdown up with what you were\n\
-             # doing at the time.\n\
-             report_every_s = 30\n\
-             # A sample taken while the game has not returned to its message loop for\n\
-             # this long is counted into a second, separate profile. That one is what\n\
-             # explains lag spikes: an average profile of a hitching game is dominated\n\
-             # by the frames that were fine.\n\
-             stall_threshold_ms = 20\n"
+             # Rows per table. 25 to read, more to analyse.\n\
+             top = 25\n\
+             # Also report how much was sampled during a hitch.\n\
+             stalls = true\n"
         }
         _ => "",
     }
