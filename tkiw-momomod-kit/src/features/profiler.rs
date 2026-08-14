@@ -6,11 +6,12 @@
 //! `sub_1ca3ab0 17.2%` at the top of a startup profile -- 45.7% of a launch, named by
 //! nothing. Turning that into an answer took a day of disassembly: recognising a CRC-32
 //! inner loop, matching the polynomial table, and scanning for the two functions' shared
-//! caller, to conclude they are one Ogg/Vorbis decoder. A profiler that needs that much
-//! follow-up has not profiled anything.
+//! caller -- and the conclusion, "one Ogg/Vorbis decoder", was wrong. They are texture
+//! page decompression. A profiler that needs that much follow-up has not profiled
+//! anything, and the follow-up it needed got the wrong answer.
 //!
 //! It also ranked by self time and printed 25 rows, so the game's C++ runtime, `ntdll`,
-//! `win32u`, `d3d11` and the codec filled every slot and not one GML function appeared.
+//! `win32u`, `d3d11` and the decompressor filled every slot and not one GML function appeared.
 //! And it reported on a wall-clock timer, so `obj_init` and the splash screen were
 //! averaged together and neither could be recovered.
 //!
@@ -108,14 +109,31 @@ static PHASE: AtomicU8 = AtomicU8::new(UNKNOWN);
 /// Ranges are each function's own `.pdata` extent, not a span covering several. The
 /// first attempt used `0x1c9fb28..0x1ca269c` for the pair, which is the *decoder's* own
 /// extent -- it contains one of the two and misses the other by 5 KB.
+///
+/// **These two were called "ogg/vorbis decode" for a day, and it was wrong.** The
+/// polynomial fit, and the image contains `OggS` and `vorbis`, so the identification
+/// looked solid. It was circumstantial: those strings live in the audio subsystem,
+/// which is nowhere near this code. A literal captured stack settled it --
+///
+/// ```text
+/// #6  sub_1c0dd90              the per-page loader
+/// #7  sub_1c53cc6              inside texture_prefetch (0x1c53c30)
+/// #8  call_builtin_by_index
+/// #9  obj_init_Create_0
+/// ```
+///
+/// -- so it decompresses **texture pages**. CRC-32 with polynomial 0x04C11DB7 is
+/// bzip2's block checksum as much as Ogg's page checksum, and the image carries `bzip`
+/// strings and a `1.0.8` marker, which is bzip2's version. Naming it bzip2 outright
+/// would repeat the mistake, so it is named for what the stack proves: texture pages.
 const KNOWN: &[(usize, usize, &str)] = &[
     // The parent that calls both halves.
-    (0x1c9fb28, 0x1c9fd30, "ogg/vorbis decode"),
-    // The decoder: 10,604 bytes around a very large state struct.
-    (0x1c9fd30, 0x1ca269c, "ogg/vorbis decode"),
-    // CRC-32, MSB-first, polynomial 0x04C11DB7 against the table at 0x29856d0 -- which
-    // is Ogg's page checksum, not PNG's or zlib's (both use the reflected 0xEDB88320).
-    (0x1ca3ab0, 0x1ca427a, "ogg page checksum"),
+    (0x1c9fb28, 0x1c9fd30, "texture page decompress"),
+    // The decompressor: 10,604 bytes around a very large state struct.
+    (0x1c9fd30, 0x1ca269c, "texture page decompress"),
+    // CRC-32, MSB-first, polynomial 0x04C11DB7 against the table at 0x29856d0. Not
+    // PNG's or zlib's, which both use the reflected 0xEDB88320.
+    (0x1ca3ab0, 0x1ca427a, "texture page checksum"),
     // `rep stosb`, sixteen bytes long.
     (0x1ea5cc0, 0x1ea5cd0, "memset"),
     // Walks a table of pointers backwards, comparing each entry byte by byte against
@@ -164,6 +182,12 @@ pub struct Profiler {
     /// Sampling stops itself after this. Zero means never, which is a choice a player
     /// has to make deliberately rather than one they can be left in.
     stop_after: Duration,
+    /// Print whole stacks for samples whose innermost frame's name contains this.
+    ///
+    /// An aggregate says a function is hot; it cannot say who called it, and inferring
+    /// the caller from inclusive percentages got the answer wrong once already. A
+    /// handful of literal stacks settles it.
+    trace: String,
     stop: Option<Arc<AtomicBool>>,
 }
 
@@ -178,6 +202,7 @@ impl Default for Profiler {
             // exists because one was left on, and the game raised "font already exists"
             // out of a load callback that fired twice.
             stop_after: Duration::from_secs(120),
+            trace: String::new(),
             stop: None,
         }
     }
@@ -253,8 +278,11 @@ impl Feature for Profiler {
         self.top = top as usize;
 
         self.stalls = section.bool("stalls", true)?;
+        self.trace = section.get("trace").unwrap_or("").to_string();
         self.stop_after = Duration::from_secs(section.u64("stop_after_s", 120)?);
-        for k in section.unknown(&["enabled", "interval_ms", "top", "stalls", "stop_after_s"]) {
+        for k in
+            section.unknown(&["enabled", "interval_ms", "top", "stalls", "stop_after_s", "trace"])
+        {
             logln!("[profiler] config: unknown key {k:?} - ignored");
         }
         Ok(())
@@ -279,12 +307,13 @@ impl Feature for Profiler {
         let top = self.top;
         let stalls = self.stalls;
         let stop_after = self.stop_after;
+        let trace = self.trace.clone();
 
         let stop = Arc::new(AtomicBool::new(false));
         self.stop = Some(stop.clone());
         std::thread::Builder::new()
             .name("momomod-profiler".into())
-            .spawn(move || run(base, symbolizer, interval, top, stalls, stop_after, stop))
+            .spawn(move || run(base, symbolizer, interval, top, stalls, stop_after, trace, stop))
             .map_err(|e| format!("could not start the sampling thread: {e}"))?;
 
         logln!(
@@ -322,6 +351,7 @@ fn run(
     top: usize,
     stalls: bool,
     stop_after: Duration,
+    trace: String,
     stop: Arc<AtomicBool>,
 ) {
     // Wait for the frame hook to name the game's thread. It arms within a second of the
@@ -359,6 +389,7 @@ fn run(
     // exits is a report nobody ever sees. Each one covers everything so far, so the
     // last one in the log is the complete answer and the earlier ones are supersed
     let mut reported_at = Instant::now();
+    let mut traced = 0u32;
     let csv = run_file();
     if let Some(p) = &csv {
         logln!("[profiler] this run's samples go to {}", p.display());
@@ -428,6 +459,29 @@ fn run(
 
         // Leaf: where the CPU actually is.
         let leaf = sym.resolve(base, frames[0]);
+
+        // A few literal stacks for whatever is being traced. Aggregates cannot name a
+        // caller; this can.
+        if !trace.is_empty() && traced < 3 {
+            let leaf_name = known_name(leaf.func as usize)
+                .map(String::from)
+                .unwrap_or_else(|| sym.name_of(leaf.func));
+            if leaf_name.contains(&trace) {
+                traced += 1;
+                logln!("[profiler] stack {traced} with leaf {leaf_name:?}, innermost first:");
+                for (depth, &pc) in frames.iter().take(n).enumerate() {
+                    let s = sym.resolve(base, pc);
+                    let name = if s.inside {
+                        known_name(s.func as usize)
+                            .map(String::from)
+                            .unwrap_or_else(|| sym.name_of(s.func))
+                    } else {
+                        mods.name_of(pc)
+                    };
+                    logln!("[profiler]   #{depth:<2} {name}");
+                }
+            }
+        }
         if leaf.inside {
             *b.self_.entry(leaf.func).or_insert(0) += 1;
         } else {
@@ -657,12 +711,12 @@ mod tests {
     #[test]
     fn known_ranges_name_what_was_identified_by_hand() {
         // the two functions that were 45.7% of a startup profile, and their parent
-        assert_eq!(known_name(0x1c9fb28), Some("ogg/vorbis decode"));
-        assert_eq!(known_name(0x1c9fd30), Some("ogg/vorbis decode"));
-        assert_eq!(known_name(0x1ca3ab0), Some("ogg page checksum"));
+        assert_eq!(known_name(0x1c9fb28), Some("texture page decompress"));
+        assert_eq!(known_name(0x1c9fd30), Some("texture page decompress"));
+        assert_eq!(known_name(0x1ca3ab0), Some("texture page checksum"));
         // an address inside each range, not just its first byte
-        assert_eq!(known_name(0x1ca0000), Some("ogg/vorbis decode"));
-        assert_eq!(known_name(0x1ca4000), Some("ogg page checksum"));
+        assert_eq!(known_name(0x1ca0000), Some("texture page decompress"));
+        assert_eq!(known_name(0x1ca4000), Some("texture page checksum"));
         // and the gap between them belongs to neither
         assert_eq!(known_name(0x1ca3000), None);
         assert_eq!(known_name(0x1000), None);

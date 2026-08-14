@@ -240,3 +240,39 @@ Two consequences, both now in the code:
 
 **Never leave a measurement configuration installed.** The player's next launch is not
 your measurement.
+
+## Naming a function you have not proven
+
+Two functions took three quarters of startup. They contained a CRC-32 loop with
+polynomial `0x04C11DB7`, and the image contains `OggS` and `vorbis`. That is Ogg's page
+checksum, so they went into the profiler's name table as "ogg/vorbis decode".
+
+Everything downstream of that name was wrong for a day: that startup was audio-bound,
+that the fix was streaming sound, that the expensive call was `texturegroup_load` -- a
+whole plan reasoned from a label nobody had checked. A single captured stack showed frame
+#7 inside `texture_prefetch`; the polynomial is bzip2's block checksum, which uses the
+same one, and the `OggS` strings belong to a subsystem that never appears on the stack.
+
+Worse, `for-the-developers/performance.md` from the very first session already said
+`obj_init_Create_0` -> `texture_prefetch` -> page decode. A correct finding was regressed
+into a wrong one.
+
+**A name in the profiler's `KNOWN` table is an assertion, and it becomes permanent the
+moment somebody reads it.** Put an address in until a stack proves the name.
+
+**Aggregates cannot name a caller.** Inferring one from inclusive percentages produced a
+confident wrong answer twice here. `trace = <substring>` in the profiler config prints
+whole stacks for samples whose innermost frame matches; one stack ended a week of
+percentage-staring. Reach for it early, not last.
+
+## Do not rewrite a source file through Python
+
+`io.open(path, 'w', newline='\n')` truncates the file, *then* raises on the invalid
+argument. `profiler.rs` went to zero bytes with no version control and no backup.
+
+Open-for-write destroys before it validates, and every destructive slip in this project
+came from the same pattern: editing an existing file through a shell or Python one-liner
+instead of an editing tool that fails without writing. Heredocs are fine for files being
+created fresh. For anything that already exists, use Edit.
+
+The repo is under git now, so this is survivable. It was not, that day.

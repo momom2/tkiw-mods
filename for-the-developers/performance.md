@@ -47,6 +47,28 @@ question is scope and timing, not whether. Options:
 
 In-run profiles after skipping showed no compensating texture-load cost.
 
+### Revisited, 2026-08-13: the mechanism holds, the headline does not
+
+Everything above about *where* the time goes was confirmed by a second, larger
+measurement: 22 launches, sampling profiler, medians with confidence intervals. In
+`obj_init`, texture page decompression is 45.2% (95% CI 43.6-46.8) and its CRC 28.0%
+(26.5-29.5), under one `texture_prefetch` call from `obj_init_Create_0` -- verified this
+time by a captured stack rather than inferred.
+
+**The "~30% reduction" did not reproduce.** Skipping the prefetch, four launches each
+way: median 48.7s to the menu with it skipped against 52.4s without, when run-to-run
+spread with nothing changed is 18.8s. The figures in the table above come from single
+runs, which on this machine cannot distinguish a 10s effect from noise.
+
+The two are not in conflict about the cause. The note above -- that ~8s of the saving
+returns during the splash, because unprefetched pages decompress on first draw -- is
+most likely the whole story: skipping moves the work rather than removing it.
+
+**What would remove it** is declining an atlas that is never drawn at all. Per-group
+timings: `default` (every sprite in the game) 0 ms, `font_lat` ~1.0 s, `font_cyr` ~1.6 s,
+`font_kr` ~4.1 s, `font_jp` ~9.9 s, `font_chi` ~11.0 s. A player reading one script needs
+one of those five. That saving has not yet been measured and is the open question.
+
 ---
 
 ## 2. Resource-gain popups rebuild their text every frame

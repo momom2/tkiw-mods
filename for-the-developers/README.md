@@ -8,7 +8,7 @@ Nothing here requires any mod to act on.
 | [performance.md](performance.md) | Two measured performance problems: boot-time texture prefetch, and per-frame text rebuilds in the resource-gain popups. |
 | [king-leo-morale.md](king-leo-morale.md) | King Leo's morale damage bonus is applied at half its described rate. |
 | [brick-factory-fortifications.md](brick-factory-fortifications.md) | The Fortifications upgrade's 100 HP cap is never enforced; castle max HP grows without bound. |
-| [startup-redesign.md](startup-redesign.md) | Ground-up analysis of cold start: ~46%% is Ogg/Vorbis decoding, 26.5s is glyph atlases, and a plan in the order the evidence supports. |
+| [startup-redesign.md](startup-redesign.md) | Ground-up analysis of cold start: three quarters of the init room is texture page decompression, almost all of it glyph atlases for unused languages. |
 
 Conventions for anything added here:
 

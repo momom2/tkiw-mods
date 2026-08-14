@@ -15,8 +15,11 @@ Status: `[ ]` not started · `[~]` partly done · `[x]` done
       (spread 5.9s). A 3.7s median difference against 19s of noise is not a result. The
       feature stays on because the median is the right way round and it costs nothing,
       but nobody should claim a number for it until a larger batch says one.
-      Cause: `texture_prefetch` called from `obj_init_Create_0`, 26 s of CPU-bound
-      texture decoding before anything is on screen.
+      Cause, now confirmed by a captured stack rather than inferred: one
+      `texture_prefetch` call from `obj_init_Create_0`. Over 22 launches it is 45.2%
+      (CI 43.6-46.8) texture page decompression plus 28.0% (26.5-29.5) its CRC -- about
+      three quarters of the init room. See
+      [`for-the-developers/startup-redesign.md`](for-the-developers/startup-redesign.md).
 - [x] **Faster in-reign speed with lots of production.** It was **not** the units: the
       floating resource-gain popups rebuild their Scribble text every frame, because the
       fade value is baked into the string and the string is the cache key. Feature
@@ -32,6 +35,35 @@ Upstream write-up: [`for-the-developers/performance.md`](for-the-developers/perf
 stalls remaining after the two fixes above are `Present` blocking in the graphics stack
 on integrated graphics, with the Steam overlay in the same path. No game-side frames at
 all. Advice for that is outside a mod — frame cap, or disabling the overlay for the game.
+
+## Startup: where it stands, and the one open question
+
+Twenty-two profiled launches, medians with confidence intervals, tooling in
+`knowledge-base/tools/` (`measure-startup.py`, `profiles.py`, `timeit.py`,
+`builtin_calls.py`).
+
+**Settled.** Three quarters of `obj_init` is texture page decompression under a single
+`texture_prefetch` call. The 23 content libraries are under 2% together despite being
+6.2 MB of compiled code. `texturegroup_load("splash_screen")` -- the last statement in
+init -- is *not* on any hot stack. The cost is glyph atlases: `default` (every sprite in
+the game) decompresses in 0 ms, while `font_chi` takes ~11 s, `font_jp` ~9.9 s,
+`font_kr` ~4.1 s, `font_cyr` ~1.6 s, `font_lat` ~1.0 s.
+
+- [ ] **The open question: does declining an atlas actually save time?** Skipping the
+      whole prefetch does not -- pages decompress on first draw instead, which is why the
+      splash grows when it is skipped. But an atlas for a script that is *never drawn*
+      should never be decompressed at all. `[feature.font_atlases]` already declines
+      chosen atlases and is off by default awaiting exactly this measurement. Batches
+      each way with `measure-startup.py --with fast_boot,font_atlases`, then
+      `profiles.py`. **This is the next thing to do.**
+- [ ] **Why is font baking sometimes free?** `scribble_font_bake_shader` averages 7.8% of
+      init but ranges 0-11% across runs -- present on some launches, absent on others.
+      A cache that is sometimes warm would be both the explanation and a fix.
+- [ ] **The first 4.6 seconds**, before the message loop runs. Never investigated.
+- [ ] **Tell the developers about the re-entrancy hole.** `obj_font_tex_control_Step_0`
+      invokes `on_loaded_callback` -> `generate_fonts` (62 KB, no guard) and fires it
+      twice if the main thread is slowed enough; Scribble then raises "font already
+      exists". Reproduced twice by attaching a profiler.
 
 ---
 

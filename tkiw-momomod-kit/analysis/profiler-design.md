@@ -7,7 +7,7 @@ written from the two concrete ways it failed rather than from first principles.
 
 **It reported addresses, not answers.** The two entries at the top of the startup
 profile were `sub_1c9fd30` (28.5%) and `sub_1ca3ab0` (17.2%) — 45.7% of startup, named
-by nothing. Working out that they were one Ogg/Vorbis subsystem took a separate manual
+by nothing. Working out that they were one decompression subsystem took a separate manual
 investigation: disassembling both, recognising a CRC-32 inner loop, matching the
 polynomial table, and scanning for their shared caller. **A profiler whose output
 requires that much follow-up has not profiled anything.**
@@ -54,7 +54,7 @@ by the game. For those, a table of `(range, name)`:
 
 ```rust
 const KNOWN: &[(usize, usize, &str)] = &[
-    (0x1c9fb28, 0x1ca269c, "ogg/vorbis decode"),
+    (0x1c9fb28, 0x1ca269c, "texture page decompress"),
     // one line per thing anybody ever identifies by hand
 ];
 ```
@@ -81,7 +81,7 @@ obj_init          4.1s   1642 samples
   gml_Script_improvement_library    ...    ...
   ...
   engine and OS                     ...    ...
-    ogg/vorbis decode               ...    ...
+    texture page decompress         ...    ...
     d3d11.dll                       ...    ...
 ```
 
@@ -130,3 +130,24 @@ place, which is worse than not attributing it.
 **Mitigation:** report, per phase, the share of samples that found *no* named GML frame.
 If that number is large the rollup is not working, and it says so on its own face
 instead of producing a confident wrong table.
+
+---
+
+## What shipping it taught
+
+Three things the design did not anticipate, all found by using it:
+
+* **A name in the table can be wrong.** These two were called "ogg/vorbis decode" for a
+  day on circumstantial evidence -- the right CRC polynomial, and `OggS`/`vorbis` present
+  somewhere in the image. A captured stack showed they run under `texture_prefetch` and
+  have nothing to do with audio. The table makes an identification permanent, which is
+  its value and its hazard.
+
+* **Aggregates cannot name a caller.** Inferring one from inclusive percentages produced
+  a confident wrong answer twice. `trace = <substring>` now prints whole stacks for
+  samples whose innermost frame matches, and one stack settled what a week of
+  percentages could not.
+
+* **The profiler can crash the game.** Suspending the game thread a thousand times a
+  second makes a load callback fire twice; see `notes-for-claude/pitfalls.md`. It now
+  stops itself after `stop_after_s`.

@@ -24,6 +24,10 @@ build-guard test reads.
 | `gen_proxy.py` | picks a proxy-DLL slot for a new mod, and generates its forwarder list. `--survey` ranks the candidates; see [injection.md](injection.md) |
 | `playtest.py` | **launches the game unattended**, waits for patterns in a mod's log, and kills it. Turns "does it still boot, and how long does it take" into a command |
 | `timeit.py` | launches the game N times and reports median and **spread** of time to the main menu. The spread is why: single-run startup figures on this machine varied by 20s |
+| `measure-startup.py` | switches everything the kit does off, turns the profiler on, launches once, and **restores the config afterwards**. `--keep` opts out of the restore; see the pitfall about leaving a measuring config installed |
+| `profiles.py` | aggregates the profiler's per-launch CSVs into means with 95% confidence intervals. One run is a hypothesis; this is what turns a batch into a finding |
+| `builtin_calls.py` | names every runtime builtin a given GML function calls. The trick is that a builtin's dispatcher index slot carries its name string pointer 8 bytes below it, exactly as a variable slot does |
+| `gen_builtin_table.py` | bakes those 2,769 names into `tkiw-runtime/src/builtins_table.rs`, so the profiler can symbolise them at runtime |
 | `keep-awake.ps1` | holds the machine awake for an unattended session, via `SetThreadExecutionState`. For overnight runs, where a machine that sleeps halfway through wastes all of it |
 
 The `.pickle` files beside them are caches and are regenerated on demand;

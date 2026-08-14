@@ -24,13 +24,15 @@ stories in those. Specifically:
   especially decisions *not* to do something. The reasoning is the valuable part; the
   outcome is usually recoverable from the code.
 - **Wrong turns.** Conclusions that were later contradicted, kept alongside what
-  disproved them. This repo has three good examples so far, and each one was believed
+  disproved them. This repo has four good examples so far, and each one was believed
   confidently, with evidence, and was wrong:
   - "compiled GML never calls the builtins" — real measurement, wrong inference
   - "the timeline shows when `obj_init` starts" — it showed when the registry became
     readable, which is 22 seconds later
   - "quantise the alpha from the frame hook" — Step recomputes it before Draw, so the
     write does nothing
+  - "startup is ogg/vorbis decoding" — the right CRC polynomial for the wrong codec; a
+    day of planning was reasoned from a name nobody had checked
 
 ## Things worth knowing before you start
 
