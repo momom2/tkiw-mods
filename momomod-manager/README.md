@@ -41,8 +41,12 @@ Installed mods load the next time the game starts. That is the whole loop:
 **Reward auto-picker** — picks reward choices for you, by rules you set. It
 writes its own config from the live game's option lists, so you edit which
 resources, spells, units and upgrades it wants, how many rerolls it may spend,
-and it presses the buttons for you. Press **Ctrl+Alt+P** in game to toggle it on
-and off; the toggle is saved, so what you chose is what the next launch does.
+and it presses the buttons for you. Press **Ctrl+Alt+P** in game to stop and
+resume its *pressing* without switching the mod off — with pressing off it still
+reads each choice and logs what it would have taken, so you get a running
+commentary rather than silence. That toggle is saved, so what you chose is what
+the next launch does. (The mod's own on/off switch is the checkbox in the mod
+manager, which is a different thing: it decides whether the mod runs at all.)
 
 **Bug fixes** — restores behaviour the game describes but does not do. Each fix
 is switchable on its own:

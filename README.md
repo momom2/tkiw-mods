@@ -66,10 +66,6 @@ does); reach for a new plugin crate when the mod is a distinct shippable thing.
 **A developer-only tool** (a probe, a profiler, a diagnostic) is a `hidden` feature of
 [`momomod-manager`](momomod-manager) instead, so a player never meets it.
 
-The standalone morale fix is the exception that proves the rule: a static patch to the
-executable on disk is a genuinely different lifetime from an in-memory feature, so it is
-its own thing outside the manager.
-
 ## Conventions worth keeping
 
 **Depend on `tkiw-runtime`; do not copy it.** The things that go wrong in that layer —
@@ -95,7 +91,7 @@ machine.
 
 ```bash
 cargo build --release       from here
-cargo test --release        142 tests; game-dependent ones skip if the game is absent
+cargo test --release        136 tests; game-dependent ones skip if the game is absent
 ```
 
 Rust, MSVC toolchain, **standard library only** — no third-party crates, so it builds
@@ -106,13 +102,16 @@ carries a stamped install path (which would leak the builder's folder).
 
 ## Releasing
 
-A release is four assets on one GitHub release: the manager zip
-(`momomod-<version>.zip`), `catalog.json` (the mods the manager offers), and one
-`<mod>.dll` per published mod. The manager fetches all of them from the release's
-`latest/download/` URL, so the repository must be **public** for players to reach them.
+Everything goes on **one** GitHub release: two manager zips (`momomod-<version>.zip`
+for players, `-modder.zip` with the diagnostics visible), `catalog.json` (the mods the
+manager offers), one `<mod>.dll` per published mod, and each mod's own rendered default
+config (`<mod>.default.ini`, so "install and enable" needs no hand-written copy). The
+manager fetches these from the release's `latest/download/` URL — only one release can
+be "latest", which is why the two audiences are two zips rather than two releases — so
+the repository must be **public** for players to reach them.
 
 ```bash
-python stage-release.py            build and stage all four into dist/release/
+python stage-release.py            build and stage every asset into dist/release/
 python stage-release.py --serve    also serve them locally, to run the whole
                                    download-and-install flow before publishing
 ```
