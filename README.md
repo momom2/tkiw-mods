@@ -1,30 +1,11 @@
 # TKIW mods
 
-Mods for *The King is Watching*, and the shared knowledge and tooling behind them.
+**momomod** — a mod manager for *The King is Watching*, the mods it manages, and
+the framework they are built on.
 
-- **[BACKLOG.md](BACKLOG.md)** — what is done, what is next, and what is blocking each.
-- **[knowledge-base/](knowledge-base)** — how to mod this game at all. Read
-  [`orientation.md`](knowledge-base/orientation.md) first; it is short and it rules out
-  the obvious approaches that do not work.
-
-## The four audiences
-
-Everything here is written for exactly one of four readers, and it should always be
-obvious which. **This is the organising principle; keep it.**
-
-| audience | where | style |
-|---|---|---|
-| **Players** | each mod's `README.md`, `install.py`, `uninstall.py`, `dist/*.zip` | Only what is needed to use the mod. No build steps, no internals. |
-| **The game's developers** | [`for-the-developers/`](for-the-developers) | Clinical. Phrased in terms of *their* source, self-contained, short. |
-| **Other modders** | [`knowledge-base/`](knowledge-base), each mod's `spec.md` and `analysis/` | Clinical. Facts, tables, addresses, APIs, measurements. Minimal prose. |
-| **Claude** | `notes-for-claude/` — **local only, not in this repository** | Whatever works. Narrative, lessons, wrong turns, session notes. Not for human consumption, and so not published. |
-
-The last row is the one that keeps the others clean: war stories, "this cost a session",
-and reasoning-in-progress go there, so the human-facing documents can stay terse.
-
-Anything that is none of those — logs, configs, save snapshots, build output — is
-**local only** and never leaves the machine. It is listed in `.gitignore`, and
-`package.py` refuses to ship it.
+**Playing?** You want [`momomod-manager/README.md`](momomod-manager/README.md):
+install the manager, then pick the mods you want from a window. Everything else
+here is for people who want to read or write the code.
 
 ## What this is
 
@@ -61,15 +42,17 @@ tkiw-bugfixes-plugin/     morale_fix + fortifications_cap                     [p
 tkiw-reward-picker-plugin/ the auto-picker as a plugin                         [published]
 tkiw-reward-auto-picker/  the picker's core logic (rlib the plugin links)
 tkiw-gameplay-plugin/     unit-stats-on-hover overlay          [built, not yet published]
-tkiw-morale-fix/          the standalone static byte-patch morale fix, and the pristine
-                          .exe every analysis reads (not a workspace member)
 
-  knowledge and parked work
-knowledge-base/           how the game works, and the tools to find out more
-  tools/                  Python: disassembly, symbol tables, proxy picking, playtesting
-for-the-developers/       shareable upstream write-ups
-quarantine/               features parked out of the build (fast_boot, font_atlases)
+  releasing
+stage-release.py          builds and stages everything a release ships
 ```
+
+**What is deliberately not here.** How the game was reverse-engineered — the
+disassembly tooling, the measurements, the write-ups for the game's own developers,
+features parked out of the build — is kept out of this repository on purpose. This
+is the mod manager, its mods, and what holds them together, so that someone looking
+into what momomod *is* finds that rather than a research archive. Ask if you want
+the research; it exists, it is just not clutter here.
 
 ### Where new work goes
 
@@ -99,9 +82,9 @@ repository were found by profiling and would not have been guessed: one looked l
 I/O and was CPU, the other looked like unit AI and was text rendering. Two of the
 loudest complaints turned out not to be the game's fault at all.
 
-**Record the wrong turns too.** The `analysis/` documents (and the unpublished
-`notes-for-claude/`) keep conclusions that were later contradicted, with what
-disproved them. A wrong note that nobody knows is wrong is worse than no note.
+**Record the wrong turns too.** The unpublished analysis notes keep conclusions that
+were later contradicted, with what disproved them. A wrong note that nobody knows is
+wrong is worse than no note.
 
 **Every baked address carries a byte signature**, and a mismatch disables the thing that
 depends on it rather than calling into whatever now lives there. A mod that checks only

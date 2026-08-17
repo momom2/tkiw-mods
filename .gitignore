@@ -50,3 +50,23 @@ tkiw-reward-auto-picker/docs/*.json
 # Written for Claude, not for human consumption: session notes, war stories,
 # reasoning-in-progress. Kept locally, never published.
 /notes-for-claude/
+
+# ---------------------------------------------------------------------------
+# Kept local, deliberately. This repository is the mod manager, its framework,
+# the mods it manages, and what holds those together -- so that someone looking
+# into what momomod *is* finds that and not a research archive. The material
+# below is how the game was worked out, not part of what ships.
+# ---------------------------------------------------------------------------
+/for-the-developers/
+/knowledge-base/
+/BACKLOG.md
+/quarantine/
+/tkiw-morale-fix/
+/momomod-manager/analysis/
+/tkiw-reward-auto-picker/analysis/
+
+# Design specs that predate the plugin architecture: spec.md still argues that
+# features are compiled in rather than loaded as DLLs, which is the opposite of
+# what shipped. Kept local until rewritten; a wrong document is worse than none.
+/momomod-manager/spec.md
+/tkiw-reward-auto-picker/spec.md

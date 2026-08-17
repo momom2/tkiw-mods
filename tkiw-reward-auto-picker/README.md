@@ -1,15 +1,16 @@
 # tkiw-reward-auto-picker
 
-> **This mod is now part of TKIW's momomod Kit.**
+> **This mod ships through [momomod](../momomod-manager/README.md), the mod manager.**
 >
-> The picking logic lives on here and is linked into the kit, which supplies the DLL,
-> the frame hook and the log. The standalone `version.dll` is no longer built: install
-> the kit instead, switch on the `reward-picker` mod, and put your rules in
-> `config/reward-picker.ini` — the same file this one calls `config.ini`, so copying it
-> across keeps every setting.
+> Install momomod, open its window, and install **Auto-picker mod**. Your rules go in
+> `config/reward-picker.ini` — the same document this page calls `config.ini`, so a
+> config copied across keeps every setting. **Everything below about *what* it picks
+> and how to configure it still applies**; only the way it is installed has changed.
 >
-> An existing standalone install keeps working and takes priority; the kit's copy
-> detects it and stands down. `uninstall.py` here still removes it.
+> This crate is now the picking logic, linked into the mod momomod loads; the manager
+> supplies the DLL, the frame hook and the log. The standalone `version.dll` is no
+> longer built. An existing standalone install keeps working and takes priority — the
+> managed copy detects it and stands down — and `uninstall.py` here still removes it.
 
 
 Empties your reward queue in *The King is Watching* the way you would have, from
@@ -178,9 +179,13 @@ python uninstall.py            remove it; the game folder is left as it was
 python uninstall.py --purge    also delete the config and log
 ```
 
-Installing adds exactly one file to the game folder, `version.dll`, and never
-touches the executable — so nothing here can be undone by a Steam integrity
-check. A check may delete `version.dll` itself; re-run `install.py`.
+Those two scripts are for the **standalone** install, which is no longer built —
+they remain so that an existing one can still be removed. Installed through
+momomod instead, the picker is a DLL in the manager's `mods/` folder, and the mod
+manager's Uninstall button removes it.
+
+Either way no game file is touched, so nothing here can be undone by a Steam
+integrity check.
 
 ## Game updates
 
