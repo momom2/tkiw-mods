@@ -8,7 +8,7 @@ including the picker, whose startup probe reads the 46 MB executable and sleeps 
 five-second rounds, which is not a thing the unmodified game does.
 
   python measure-startup.py                 baseline: nothing patched, profiler on
-  python measure-startup.py --with fast_boot,font_atlases
+  python measure-startup.py --with popup_stutter_fix
   python measure-startup.py --restore       put the config back as it was
 
 The config files are rewritten in place and a copy of each is kept as
@@ -28,8 +28,8 @@ CONFIG = os.path.join(KIT, "config")
 LOG = os.path.join(KIT, "momomod.log")
 
 # Everything that changes the game, and so must be off for a baseline.
-PATCHING = ["fast_boot", "font_atlases", "popup_stutter_fix", "morale_fix",
-            "fortifications_cap"]
+# (fast_boot and font_atlases are quarantined -- see quarantine/README.md)
+PATCHING = ["popup_stutter_fix", "morale_fix", "fortifications_cap"]
 # Diagnostics: on, because they are the measurement.
 WATCHING = ["profiler", "timeline"]
 # Off even so: its one-shot dump costs seconds at the menu.

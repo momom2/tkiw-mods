@@ -1,0 +1,15 @@
+[package]
+name = "momomod_kit"
+description = "The momomod modding framework: the Feature trait, the config system, and the per-feature runner a mod is built from"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "momomod_kit"
+crate-type = ["rlib"]
+
+[dependencies]
+# The low-level game-interfacing layer, and the loader<->mod ABI. A mod author
+# depends on this one crate and gets all three.
+tkiw_runtime = { path = "../tkiw-runtime" }
+tkiw_plugin = { path = "../tkiw-plugin" }

@@ -1,0 +1,6 @@
+{
+  "mods": [
+    {"name": "bugfixes", "title": "Bugfix mod", "blurb": "Fix miscellaneous inconsistencies and minor issues.", "self_configuring": false},
+    {"name": "reward-picker", "title": "Auto-picker mod", "blurb": "Pick rewards automatically according to your preferences. No effect until the config is set.", "self_configuring": true}
+  ]
+}

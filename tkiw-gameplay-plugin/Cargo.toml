@@ -1,0 +1,16 @@
+[package]
+name = "tkiw_gameplay_plugin"
+description = "Gameplay quality-of-life for The King is Watching, as a momomod-loadable mod DLL"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "tkiw_gameplay_plugin"
+crate-type = ["cdylib"]
+
+[dependencies]
+# One dependency: the modding framework brings the Feature trait, the config
+# system, the runner, and re-exports tkiw_runtime and the ABI.
+momomod_kit = { path = "../momomod-kit" }
+tkiw_plugin = { path = "../tkiw-plugin" }
+tkiw_runtime = { path = "../tkiw-runtime" }

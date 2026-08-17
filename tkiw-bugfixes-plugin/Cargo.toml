@@ -1,0 +1,19 @@
+[package]
+name = "tkiw_bugfixes_plugin"
+description = "Bug fixes for The King is Watching, as a momomod-loadable mod DLL"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "tkiw_bugfixes_plugin"
+# rlib as well as cdylib so `dump-default-config` can link the feature list and
+# render the same default config the mod writes at runtime -- one source, no
+# hand-written copy in the mod manager.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# One dependency: the modding framework brings the Feature trait, the config
+# system, the runner, and re-exports tkiw_runtime and the ABI.
+momomod_kit = { path = "../momomod-kit" }
+tkiw_plugin = { path = "../tkiw-plugin" }
+tkiw_runtime = { path = "../tkiw-runtime" }

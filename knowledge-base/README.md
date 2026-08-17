@@ -18,6 +18,7 @@ does not work.
 | [runtime-structures.md](runtime-structures.md) | RValue, strings, arrays, structs, `ds_list`, `ds_map`, instances, globals |
 | [runtime-internals.md](runtime-internals.md) | the unnamed runtime routines compiled GML actually calls, and why the builtin table does not name them |
 | [calling-into-the-game.md](calling-into-the-game.md) | the three calling conventions, and which to use |
+| [drawing.md](drawing.md) | drawing shapes on screen from a mod, with `tkiw_runtime::overlay` |
 | [injection.md](injection.md) | getting loaded, getting onto the game thread, surviving Steam |
 | [addresses.md](addresses.md) | every baked address, what it is, and how to re-derive it |
 | [game-content.md](game-content.md) | the libraries: rewards, resources, artifacts, improvements, unit classes |

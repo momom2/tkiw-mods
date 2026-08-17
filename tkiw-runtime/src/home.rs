@@ -61,6 +61,18 @@ pub fn stamped_path() -> String {
     String::from_utf8_lossy(&body[..end]).to_string()
 }
 
+/// Set the mod folder explicitly, for a mod the loader *tells* where home is
+/// rather than a stamped DLL.
+///
+/// A plugin loaded by momomod is not stamped -- only the loader's own DLL is --
+/// so it is handed its config directory at init and points `home` at the folder
+/// above it. Must be called before any [`dir`]/[`file`], and wins only if home
+/// has not already been resolved; returns whether it did. A no-op with `false`
+/// otherwise, so a double call cannot quietly move a mod's folder mid-run.
+pub fn set_dir(path: PathBuf) -> bool {
+    HOME.set(Some(path)).is_ok()
+}
+
 /// The stamped mod folder, or `None` if unstamped or the path is gone.
 ///
 /// A missing folder is not an error to route around: it means the mod was

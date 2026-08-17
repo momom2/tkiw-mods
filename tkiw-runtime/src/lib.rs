@@ -54,6 +54,7 @@ pub mod identity;
 pub mod instance;
 pub mod log;
 pub mod modules;
+pub mod overlay;
 pub mod patch;
 pub mod pe;
 pub mod phase;
@@ -61,6 +62,7 @@ pub mod rvalue;
 pub mod sample;
 pub mod saves;
 pub mod symbolize;
+pub mod trampoline;
 pub mod win;
 
 pub use identity::Identity;

@@ -6,14 +6,54 @@ version = 4
 name = "momomod_kit"
 version = "0.1.0"
 dependencies = [
- "tkiw_reward_picker",
+ "tkiw_plugin",
  "tkiw_runtime",
 ]
+
+[[package]]
+name = "momomod_manager"
+version = "0.1.0"
+dependencies = [
+ "momomod_kit",
+ "tkiw_plugin",
+ "tkiw_runtime",
+]
+
+[[package]]
+name = "tkiw_bugfixes_plugin"
+version = "0.1.0"
+dependencies = [
+ "momomod_kit",
+ "tkiw_plugin",
+ "tkiw_runtime",
+]
+
+[[package]]
+name = "tkiw_gameplay_plugin"
+version = "0.1.0"
+dependencies = [
+ "momomod_kit",
+ "tkiw_plugin",
+ "tkiw_runtime",
+]
+
+[[package]]
+name = "tkiw_plugin"
+version = "0.1.0"
 
 [[package]]
 name = "tkiw_reward_picker"
 version = "0.1.1"
 dependencies = [
+ "tkiw_runtime",
+]
+
+[[package]]
+name = "tkiw_reward_picker_plugin"
+version = "0.1.0"
+dependencies = [
+ "tkiw_plugin",
+ "tkiw_reward_picker",
  "tkiw_runtime",
 ]
 

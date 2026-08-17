@@ -276,10 +276,18 @@ fn is_live(inst: usize, obj: usize) -> bool {
 ///
 /// Option cards come in threes, so the singleton helper is not enough.
 pub fn find_all(base: usize, name: &str) -> Vec<usize> {
-    let mut out = Vec::new();
-    let Some(reg) = Registry::open(base) else { return out };
-    let Some((_index, obj)) = reg.find_object(name) else { return out };
+    let Some(reg) = Registry::open(base) else { return Vec::new() };
+    let Some((_index, obj)) = reg.find_object(name) else { return Vec::new() };
+    instances_of(obj)
+}
 
+/// Every live instance of an object record already in hand.
+///
+/// For callers sweeping many object types per tick: pairs with
+/// [`objects_with_prefix`], so the registry is walked once for the lot rather
+/// than once per name.
+pub fn instances_of(obj: usize) -> Vec<usize> {
+    let mut out = Vec::new();
     let Some(mut node) = read::<usize>(obj + OBJ_INSTANCE_LIST) else { return out };
     let mut hops = 0;
     while node != 0 && hops < MAX_CHAIN {
@@ -295,6 +303,61 @@ pub fn find_all(base: usize, name: &str) -> Vec<usize> {
         hops += 1;
     }
     out
+}
+
+/// Every object whose name starts with `prefix`, as `(name, CObjectGML*)`.
+///
+/// Built on the same rate-limited snapshot as the name lookups, so calling it
+/// every tick costs a cached vector walk, not a registry walk.
+pub fn objects_with_prefix(base: usize, prefix: &str) -> Vec<(String, usize)> {
+    let Some(reg) = Registry::open(base) else { return Vec::new() };
+    let mut out = Vec::new();
+    for (_index, obj) in reg.snapshot() {
+        let Some(name_ptr) = read::<usize>(obj + OBJ_NAME) else { continue };
+        if name_ptr == 0 {
+            continue;
+        }
+        let Some(name) = read_c_str(name_ptr, 128) else { continue };
+        if name.starts_with(prefix) {
+            out.push((name, obj));
+        }
+    }
+    out
+}
+
+/// The id of a live instance, for handing to builtins that want the id form.
+pub fn id_of(inst: usize) -> Option<i32> {
+    let id: i32 = read(inst + INST_ID)?;
+    (id >= MIN_INSTANCE_ID).then_some(id)
+}
+
+/// The object name of a live instance, for labelling what a pointer led to.
+pub fn object_name_of(inst: usize) -> Option<String> {
+    let obj: usize = read(inst + INST_OBJECT)?;
+    if obj == 0 || !is_live(inst, obj) {
+        return None;
+    }
+    let name_ptr: usize = read(obj + OBJ_NAME)?;
+    read_c_str(name_ptr, 128)
+}
+
+/// A bounded, validated C string read.
+fn read_c_str(addr: usize, cap: usize) -> Option<String> {
+    if !win::readable(addr, cap) {
+        return None;
+    }
+    let mut bytes = Vec::new();
+    for i in 0..cap {
+        let b: u8 = unsafe { core::ptr::read_volatile((addr + i) as *const u8) };
+        if b == 0 {
+            return String::from_utf8(bytes).ok();
+        }
+        if !b.is_ascii_graphic() && b != b' ' {
+            return None;
+        }
+        bytes.push(b);
+    }
+    None // unterminated within cap: not a name we trust
 }
 
 /// How many live instances a named object has, without collecting them.

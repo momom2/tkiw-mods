@@ -1,6 +1,15 @@
 ﻿[workspace]
 resolver = "2"
-members = ["tkiw-runtime", "tkiw-momomod-kit", "tkiw-reward-auto-picker"]
+members = [
+    "tkiw-runtime",
+    "tkiw-plugin",
+    "momomod-kit",
+    "momomod-manager",
+    "tkiw-reward-auto-picker",
+    "tkiw-reward-picker-plugin",
+    "tkiw-bugfixes-plugin",
+    "tkiw-gameplay-plugin",
+]
 
 # Every mod in the repository is a member and depends on `tkiw-runtime`, so one
 # `cargo test` from here covers all of them and a fix to the shared layer is proven

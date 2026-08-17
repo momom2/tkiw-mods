@@ -24,6 +24,8 @@ build-guard test reads.
 | `gen_proxy.py` | picks a proxy-DLL slot for a new mod, and generates its forwarder list. `--survey` ranks the candidates; see [injection.md](injection.md) |
 | `playtest.py` | **launches the game unattended**, waits for patterns in a mod's log, and kills it. Turns "does it still boot, and how long does it take" into a command |
 | `timeit.py` | launches the game N times and reports median and **spread** of time to the main menu. The spread is why: single-run startup figures on this machine varied by 20s |
+| `units_table.py` | flattens `libraries.json`'s UNITS into three CSVs (player / enemy / bosses) with derived dps and hit-delay columns; formulas and caveats in its docstring |
+| `describe_params.py` | recovers, statically, which fields feed each `{&N}` token in unit/trait descriptions -- the parameter methods bound into `replace_parameters_array`. Feeds `units_table.py`'s param columns |
 | `measure-startup.py` | switches everything the kit does off, turns the profiler on, launches once, and **restores the config afterwards**. `--keep` opts out of the restore; see the pitfall about leaving a measuring config installed |
 | `profiles.py` | aggregates the profiler's per-launch CSVs into means with 95% confidence intervals. One run is a hypothesis; this is what turns a batch into a finding |
 | `builtin_calls.py` | names every runtime builtin a given GML function calls. The trick is that a builtin's dispatcher index slot carries its name string pointer 8 bytes below it, exactly as a variable slot does |

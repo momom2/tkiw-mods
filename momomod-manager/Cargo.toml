@@ -1,0 +1,22 @@
+[package]
+name = "momomod_manager"
+description = "momomod manager: the loader that installs, drives and manages mods for The King is Watching"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "momomod_manager"
+# rlib alongside cdylib so the config system and signature guards can be
+# unit-tested against a real game executable without going near the game process.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+tkiw_runtime = { path = "../tkiw-runtime" }
+# The ABI contract the manager shares with every mod DLL it loads.
+tkiw_plugin = { path = "../tkiw-plugin" }
+# The modding framework: the Feature trait, the config system and the runner.
+# The manager still hosts a few features of its own (diagnostics), and the
+# framework is where those live.
+momomod_kit = { path = "../momomod-kit" }
+# The auto-picker is no longer linked in: it is a plugin DLL the manager loads
+# like any other mod. Nothing here depends on it any more.

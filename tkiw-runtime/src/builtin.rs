@@ -44,7 +44,29 @@ pub struct RValueRaw {
 
 const KIND_UNDEFINED: u32 = 5;
 
-/// Read a struct member by *name*, without needing a variable id for it.
+/// The RValue the getters want for an owner: a struct pointer as an object,
+/// or an instance by **id** -- `variable_instance_get_names` and friends are
+/// one implementation with the struct variants, but an instance handed over
+/// as a raw pointer comes back `undefined`; only the id form works. Learned
+/// from a live session where every unit enumeration failed.
+fn owner_arg(owner: &Value) -> Option<RValueRaw> {
+    match owner {
+        Value::Object(ptr) => {
+            if *ptr == 0 || !win::readable(*ptr, 8) {
+                return None;
+            }
+            Some(RValueRaw { payload: *ptr as u64, flags: 0, kind: rvalue::KIND_OBJECT })
+        }
+        Value::Int(id) if *id >= 100_000 => {
+            Some(RValueRaw { payload: (*id as f64).to_bits(), flags: 0, kind: rvalue::KIND_REAL })
+        }
+        _ => None,
+    }
+}
+
+/// Read a struct member or instance variable by *name*, without needing a
+/// variable id for it. `owner` is a struct pointer (`Value::Object`) or an
+/// instance id (`Value::Int`).
 ///
 /// The name has to reach the runtime as a GML string, and allocating one would
 /// mean asking the game for memory. It is not necessary:
@@ -61,14 +83,10 @@ pub unsafe fn struct_get_by_name(
     strukt: &Value,
     name: &str,
 ) -> Option<Value> {
-    let Value::Object(ptr) = strukt else { return None };
-    if *ptr == 0 || !win::readable(*ptr, 8) {
-        return None;
-    }
+    let arg = owner_arg(strukt)?;
     let names_fn = resolve(base, VARIABLE_STRUCT_GET_NAMES_RVA, text)?;
     let get_fn = resolve(base, VARIABLE_STRUCT_GET_RVA, text)?;
 
-    let arg = RValueRaw { payload: *ptr as u64, flags: 0, kind: rvalue::KIND_OBJECT };
     let mut names = RValueRaw { payload: 0, flags: 0, kind: KIND_UNDEFINED };
     names_fn(&mut names, core::ptr::null_mut(), core::ptr::null_mut(), 1, &arg);
     if names.kind != rvalue::KIND_ARRAY {
@@ -79,7 +97,9 @@ pub unsafe fn struct_get_by_name(
         return None;
     }
     let len = rvalue::read_i32(payload + rvalue::ARRAY_LEN)?;
-    if !(0..512).contains(&len) {
+    // Units carry many hundreds of members, far past the old 512 sanity bound;
+    // a real session hit it. Still bounded, against garbage rather than size.
+    if !(0..8192).contains(&len) {
         return None;
     }
     let items = rvalue::read_usize(payload + rvalue::ARRAY_DATA)?;
@@ -101,6 +121,58 @@ pub unsafe fn struct_get_by_name(
         return rvalue::decode(core::ptr::addr_of!(out) as usize);
     }
     None
+}
+
+/// Every member name and value of a struct or instance, in one enumeration.
+///
+/// Exists because [`struct_get_by_name`] re-enumerates the whole names array
+/// per call -- fine for one field, O(n^2) for a full dump, and a 625-member
+/// unit held the game's thread for 373ms that way. This walks the names once
+/// and does one get per member. Returns the pairs and the true member count,
+/// so a caller that caps can say so.
+///
+/// # Safety
+/// Game thread only.
+pub unsafe fn struct_members(
+    base: usize,
+    text: (usize, usize),
+    owner: &Value,
+    cap: usize,
+) -> Option<(Vec<(String, Option<Value>)>, usize)> {
+    let arg = owner_arg(owner)?;
+    let names_fn = resolve(base, VARIABLE_STRUCT_GET_NAMES_RVA, text)?;
+    let get_fn = resolve(base, VARIABLE_STRUCT_GET_RVA, text)?;
+
+    let mut names = RValueRaw { payload: 0, flags: 0, kind: KIND_UNDEFINED };
+    names_fn(&mut names, core::ptr::null_mut(), core::ptr::null_mut(), 1, &arg);
+    if names.kind != rvalue::KIND_ARRAY {
+        return None;
+    }
+    let payload = names.payload as usize;
+    if !win::readable(payload, rvalue::ARRAY_LEN + 4) {
+        return None;
+    }
+    let len = rvalue::read_i32(payload + rvalue::ARRAY_LEN)?;
+    if !(0..8192).contains(&len) {
+        return None;
+    }
+    let items = rvalue::read_usize(payload + rvalue::ARRAY_DATA)?;
+    if items == 0 || !win::readable(items, len as usize * 16) {
+        return None;
+    }
+
+    let mut out = Vec::with_capacity((len as usize).min(cap));
+    for i in 0..(len as usize).min(cap) {
+        let at = items + i * 16;
+        let Some(Value::Str(name)) = rvalue::decode(at) else { continue };
+        // Hand the runtime back its own string RValue as the key, verbatim.
+        let key = core::ptr::read_unaligned(at as *const RValueRaw);
+        let args = [arg, key];
+        let mut v = RValueRaw { payload: 0, flags: 0, kind: KIND_UNDEFINED };
+        get_fn(&mut v, core::ptr::null_mut(), core::ptr::null_mut(), 2, args.as_ptr());
+        out.push((name, rvalue::decode(core::ptr::addr_of!(v) as usize)));
+    }
+    Some((out, len as usize))
 }
 
 /// An RValue as the runtime expects it on the stack.
@@ -128,7 +200,47 @@ pub fn resolve(base: usize, rva: usize, text: (usize, usize)) -> Option<Builtin>
     Some(unsafe { core::mem::transmute::<usize, Builtin>(addr) })
 }
 
-/// The member names a struct actually has.
+/// The RVA of a named runtime builtin, from the generated table.
+///
+/// Linear over ~2,800 entries; callers that resolve in a loop should keep the
+/// result. Names with two spellings (`draw_set_colour`/`draw_set_color`) each
+/// have their own row, so either finds it.
+pub fn by_name(name: &str) -> Option<u32> {
+    crate::builtins_table::BUILTINS
+        .iter()
+        .find(|(_, n)| *n == name)
+        .map(|(rva, _)| *rva)
+}
+
+/// Call a named builtin and decode its result.
+///
+/// For **read-only lookups taking numeric arguments** -- `font_exists`,
+/// `font_get_name`, `display_get_gui_width`. Nothing here can pass a GML
+/// string, and nothing should: allocating one means asking the game for
+/// memory. At most eight arguments, which is more than any lookup wants.
+///
+/// # Safety
+/// Game thread only. The caller vouches that the named builtin is a pure
+/// lookup -- this function cannot know what the callee would mutate.
+pub unsafe fn call_by_name(
+    base: usize,
+    text: (usize, usize),
+    name: &str,
+    args: &[RValueRaw],
+) -> Option<Value> {
+    let f = resolve(base, by_name(name)? as usize, text)?;
+    let mut buf = [RValueRaw { payload: 0, flags: 0, kind: KIND_UNDEFINED }; 8];
+    if args.len() > buf.len() {
+        return None;
+    }
+    buf[..args.len()].copy_from_slice(args);
+    let mut out = RValueRaw { payload: 0, flags: 0, kind: KIND_UNDEFINED };
+    f(&mut out, core::ptr::null_mut(), core::ptr::null_mut(), args.len() as i32, buf.as_ptr());
+    rvalue::decode(core::ptr::addr_of!(out) as usize)
+}
+
+/// The member names a struct or instance actually has. `owner` as in
+/// [`struct_get_by_name`]: a struct pointer, or an instance id.
 ///
 /// # Safety
 /// Must be called on the game's thread.
@@ -137,13 +249,9 @@ pub unsafe fn struct_member_names(
     text: (usize, usize),
     strukt: &Value,
 ) -> Option<Vec<String>> {
-    let Value::Object(ptr) = strukt else { return None };
-    if *ptr == 0 || !win::readable(*ptr, 8) {
-        return None;
-    }
+    let arg = owner_arg(strukt)?;
     let f = resolve(base, VARIABLE_STRUCT_GET_NAMES_RVA, text)?;
 
-    let arg = RValueRaw { payload: *ptr as u64, flags: 0, kind: 6 };
     let mut result = RValueRaw { payload: 0, flags: 0, kind: KIND_UNDEFINED };
     f(&mut result, core::ptr::null_mut(), core::ptr::null_mut(), 1, &arg);
 
@@ -155,7 +263,9 @@ pub unsafe fn struct_member_names(
         return None;
     }
     let len = rvalue::read_i32(payload + rvalue::ARRAY_LEN)?;
-    if !(0..512).contains(&len) {
+    // Units carry many hundreds of members, far past the old 512 sanity bound;
+    // a real session hit it. Still bounded, against garbage rather than size.
+    if !(0..8192).contains(&len) {
         return None;
     }
     let items = rvalue::read_usize(payload + rvalue::ARRAY_DATA)?;

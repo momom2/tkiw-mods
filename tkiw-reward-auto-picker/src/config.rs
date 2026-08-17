@@ -418,9 +418,9 @@ delay_ms = 100
 # act = false  -> decide and log "[would PICK] ...", but press nothing
 # act = true   -> actually press the buttons
 #
-# This is the STARTING value. Ctrl+Alt+P toggles it while you play, so you can
-# switch pressing on and off without leaving the game. Editing it here also
-# takes effect immediately -- the file is re-read as you save it.
+# Ctrl+Alt+P toggles this while you play, and the toggle is WRITTEN BACK to
+# this line, so what you chose in game is what the next launch does. Editing
+# it here also takes effect immediately -- the file is re-read as you save it.
 #
 # Either way the mod keeps reading choices and logging what it would do, so
 # with pressing off you get a running commentary rather than silence.

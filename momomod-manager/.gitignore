@@ -1,0 +1,22 @@
+# whoever ran it -- never commit, never ship. These carry absolute paths,
+# usernames, and the state of a real save.
+/momomod.ini
+/momomod.reference.ini
+/momomod.log
+/momomod.log.*
+/crash.log
+/probe.incomplete
+/save-backups/
+
+# built packages
+/dist/
+__pycache__/
+
+# Installed mod DLLs: build output, and one person's install. Players get these
+# from the release; a checkout builds them.
+/mods/
+
+# Diagnostic output. These are the reports the probes write from a real session
+# -- someone's save, someone's machine -- so they stay local, like libraries.json.
+/draw-probe.md
+/hover-probe.md

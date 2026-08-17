@@ -1,0 +1,13 @@
+[package]
+name = "tkiw_plugin"
+description = "The ABI contract between the momomod loader and a mod DLL"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "tkiw_plugin"
+crate-type = ["rlib"]
+
+# No dependencies, and none wanted: this crate is only the contract -- the
+# structs and constants the loader and every mod must agree on. Both sides
+# depend on it, so it must stay tiny and stable.

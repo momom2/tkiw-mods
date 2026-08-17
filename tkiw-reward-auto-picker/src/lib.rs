@@ -19,8 +19,10 @@ use core::ffi::c_void;
 // of this mod keeps working untouched -- the migration is a change to this block and
 // nothing else.
 //
-// The old copies are still on disk in `src/` and are no longer compiled. They should
-// be deleted; they are kept only so this change is trivially reversible.
+// The old copies were kept on disk for a while "to be trivially reversible", and
+// earned their deletion by misleading an investigation: a grep matched the dead
+// builtin.rs and nearly hid that this mod shares the runtime's helpers (see
+// notes-for-claude/sessions/2026-08-14.md). They live in git history now.
 pub use tkiw_runtime::{
     builtin, dslist, fault, globals, gml, guard, home, hook, instance, log, patch, pe,
     phase, rvalue, saves, win,
@@ -1061,6 +1063,32 @@ mod tests {
     use super::*;
     use std::time::Duration;
 
+    /// The toggle's write-back must change exactly the `act` value: alignment,
+    /// comments, other sections, and line endings survive byte for byte.
+    #[test]
+    fn rewrite_act_is_surgical() {
+        let text = "# header\n[global]\nenabled  = true\nact      = false   # note\ndelay_ms = 100\n\n[other]\nact = false\n";
+        let out = rewrite_act(text, true).expect("act line found");
+        assert_eq!(
+            out,
+            "# header\n[global]\nenabled  = true\nact      = true  # note\ndelay_ms = 100\n\n[other]\nact = false\n"
+        );
+        // idempotent-ish: rewriting back restores the value, touches nothing else
+        let back = rewrite_act(&out, false).unwrap();
+        assert!(back.contains("act      = false  # note"));
+        assert!(back.contains("[other]\nact = false"), "only [global] may change");
+    }
+
+    #[test]
+    fn rewrite_act_handles_crlf_and_missing_lines() {
+        let crlf = "[global]\r\nact = true\r\n";
+        assert_eq!(rewrite_act(crlf, false).unwrap(), "[global]\r\nact = false\r\n");
+        assert!(rewrite_act("[global]\nenabled = true\n", true).is_none());
+        assert!(rewrite_act("[other]\nact = true\n", false).is_none());
+        // `action = ...` must not be mistaken for `act`
+        assert!(rewrite_act("[global]\naction = 5\n", true).is_none());
+    }
+
     fn monitor() -> Monitor {
         Monitor { interval: BASE_INTERVAL, ..Default::default() }
     }
@@ -1128,10 +1156,12 @@ mod tests {
 
 /// Whether the mod may press buttons right now.
 ///
-/// One switch, not two. `[global] act` in the config is the *starting* value;
-/// Ctrl+Alt+P toggles it during play, so enabling the mod does not mean
-/// alt-tabbing to a text file. Editing `act` in the config also takes effect,
-/// because changing it there is a deliberate statement of intent.
+/// One switch, not two -- and one *truth*, the config file. Ctrl+Alt+P
+/// toggles during play AND writes the choice back to `[global] act`, so the
+/// file never contradicts the behaviour; a toggle the file contradicted was
+/// silently undone at the next launch, and a player got picked-for because of
+/// it. Editing `act` in the file also takes effect, because changing it there
+/// is a deliberate statement of intent.
 ///
 /// Observation is unaffected: the mod always reads the choice and logs what it
 /// would do. Only pressing is gated. That way switching it off leaves you with
@@ -1190,10 +1220,93 @@ pub fn acting() -> bool {
     ACTING.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+/// Rewrite the value of `act` in `[global]`, touching nothing else.
+///
+/// Only the text between `=` and any trailing comment changes; alignment,
+/// comments and every other line survive byte for byte. `None` means the file
+/// has no `act` line to edit.
+fn rewrite_act(text: &str, act: bool) -> Option<String> {
+    let mut out = String::with_capacity(text.len() + 4);
+    let mut in_global = false;
+    let mut done = false;
+    for line in text.split_inclusive('\n') {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix('[') {
+            in_global = rest.strip_suffix(']').is_some_and(|s| s.trim().eq_ignore_ascii_case("global"));
+        }
+        if !done && in_global {
+            let key = line.trim_start();
+            if key.starts_with("act") && key["act".len()..].trim_start().starts_with('=') {
+                if let Some(eq) = line.find('=') {
+                    let rest = &line[eq + 1..];
+                    let ending_at = rest.trim_end_matches(['\r', '\n']).len();
+                    let (body, ending) = rest.split_at(ending_at);
+                    out.push_str(&line[..eq + 1]);
+                    out.push(' ');
+                    out.push_str(if act { "true" } else { "false" });
+                    if let Some(c) = body.find('#') {
+                        out.push_str("  ");
+                        out.push_str(&body[c..]);
+                    }
+                    out.push_str(ending);
+                    done = true;
+                    continue;
+                }
+            }
+        }
+        out.push_str(line);
+    }
+    done.then_some(out)
+}
+
+/// Write the toggle's decision into the config, so it survives a restart.
+///
+/// The file is re-read while the game runs and is the one statement of intent
+/// a player can always inspect -- so a runtime state that contradicts it is a
+/// surprise waiting for the next launch. It happened: a player toggled
+/// pressing off with the chord, the file still said on, and the next session
+/// picked a reward for them.
+fn persist_act(act: bool) {
+    let Some(path) = config_path() else {
+        logln!("toggle: NOT saved - no config path; this choice lasts until the game closes");
+        return;
+    };
+    let text = match std::fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(e) => {
+            logln!("toggle: NOT saved ({e}); this choice lasts until the game closes");
+            return;
+        }
+    };
+    let Some(new) = rewrite_act(&text, act) else {
+        logln!(
+            "toggle: NOT saved - no `act` line under [global] in {}; this choice \
+             lasts until the game closes",
+            path.display()
+        );
+        return;
+    };
+    match std::fs::write(&path, new) {
+        Ok(()) => {
+            // The file now agrees with the toggle, so the reload that follows
+            // this write must not count as "the player edited the config".
+            let mut g = match CONFIG_ACT.lock() {
+                Ok(g) => g,
+                Err(e) => e.into_inner(),
+            };
+            *g = Some(act);
+            logln!("toggle: saved act = {act} to the config, so it survives a restart");
+        }
+        Err(e) => logln!("toggle: NOT saved ({e}); this choice lasts until the game closes"),
+    }
+}
+
 /// Ctrl+Alt+P toggles pressing on and off.
 ///
 /// A two-modifier chord, chosen so it cannot collide with the game's own
 /// bindings -- those use letters, digits, space and the arrows unmodified.
+/// The choice is written back to `[global] act`, because a toggle the config
+/// file contradicts is undone at the next launch.
 fn poll_toggle() {
     use std::sync::atomic::Ordering;
     static WAS_DOWN: std::sync::atomic::AtomicBool =
@@ -1232,6 +1345,7 @@ fn poll_toggle() {
         } else {
             logln!("toggle: OBSERVING only - it will report but press nothing");
         }
+        persist_act(now_on);
     } else if !down {
         WAS_DOWN.store(false, Ordering::Relaxed);
     }
@@ -1371,11 +1485,51 @@ pub fn hosted_frame(n: u64) {
     on_frame(n);
 }
 
+/// Start the picker as a **momomod plugin**: a separate DLL the loader drives.
+///
+/// Unlike the kit, which links this crate and sets one shared identity, a plugin
+/// DLL is its own module with its own log and config. It is not stamped -- only
+/// the loader's DLL is -- so the loader hands it a config directory and this
+/// points `home` at the folder above it. Otherwise it is the hosted lifecycle:
+/// the loader owns the frame hook and calls [`hosted_frame`].
+///
+/// Returns `Err` if a standalone `version.dll` picker is also installed, so the
+/// plugin declines and only one copy ever presses a button.
+pub fn plugin_start(config_dir: std::path::PathBuf) -> Result<(), String> {
+    if let Some(home) = config_dir.parent() {
+        // Explicit, before anything reads home: a plugin has no stamp to read.
+        tkiw_runtime::home::set_dir(home.to_path_buf());
+    }
+    tkiw_runtime::identity::set(tkiw_runtime::Identity {
+        name: "tkiw-reward-picker",
+        marker: MARKER,
+        // No stamp: home was set explicitly above, so it is never read.
+        stamp: core::ptr::null(),
+        stamp_len: 0,
+        log_file: "picker.log",
+        orphan_note: "tkiw_reward_picker_error.log",
+    });
+    host_config_at(config_dir.join("reward-picker.ini"));
+
+    if standalone_installed() {
+        return Err("a standalone auto-picker version.dll is installed; leaving the \
+                    picking to it (run its uninstall.py to use this one)"
+            .into());
+    }
+    hosted_start();
+    Ok(())
+}
+
+/// Where the config is, hosted or standalone.
+fn config_path() -> Option<std::path::PathBuf> {
+    match HOSTED_CONFIG.lock().ok().and_then(|g| g.clone()) {
+        Some(p) => Some(p),
+        None => home::file("config.ini"),
+    }
+}
+
 fn config_now() -> Option<std::sync::Arc<config::Config>> {
-    let path = match HOSTED_CONFIG.lock().ok().and_then(|g| g.clone()) {
-        Some(p) => p,
-        None => home::file("config.ini")?,
-    };
+    let path = config_path()?;
     let mut g = match LOADED.lock() {
         Ok(g) => g,
         Err(e) => e.into_inner(),

@@ -9,17 +9,13 @@ Status: `[ ]` not started · `[~]` partly done · `[x]` done
 
 ## Done
 
-- [~] **Faster startup** — **claim withdrawn.** The original "~30% (39s -> 23-27s)" came
-      from single launches. Measured properly with `timeit.py`, four launches each way:
-      `fast_boot` on gives median **48.7s** (spread 18.8s), off gives median **52.4s**
-      (spread 5.9s). A 3.7s median difference against 19s of noise is not a result. The
-      feature stays on because the median is the right way round and it costs nothing,
-      but nobody should claim a number for it until a larger batch says one.
-      Cause, now confirmed by a captured stack rather than inferred: one
-      `texture_prefetch` call from `obj_init_Create_0`. Over 22 launches it is 45.2%
-      (CI 43.6-46.8) texture page decompression plus 28.0% (26.5-29.5) its CRC -- about
-      three quarters of the init room. See
-      [`for-the-developers/startup-redesign.md`](for-the-developers/startup-redesign.md).
+- **Faster startup — QUARANTINED (2026-08-15).** `fast_boot` and `font_atlases` are
+      parked out of the build by decision — see [`quarantine/README.md`](quarantine/README.md),
+      which carries the full overnight measurement (short version: `fast_boot` genuinely
+      saves ~6s, `font_atlases` saves nothing, the ~26s foreign-glyph cost is atlas
+      *generation* not the prefetch upload). The game-side startup *analysis* below stays —
+      it is knowledge about the game, not the parked features — and is the map for any
+      future return.
 - [x] **Faster in-reign speed with lots of production.** It was **not** the units: the
       floating resource-gain popups rebuild their Scribble text every frame, because the
       fade value is baked into the string and the string is the cache key. Feature
@@ -36,8 +32,10 @@ stalls remaining after the two fixes above are `Present` blocking in the graphic
 on integrated graphics, with the Steam overlay in the same path. No game-side frames at
 all. Advice for that is outside a mod — frame cap, or disabling the overlay for the game.
 
-## Startup: where it stands, and the one open question
+## Startup: where the analysis stands
 
+The two startup *features* are quarantined ([`quarantine/README.md`](quarantine/README.md));
+what remains here is the game-side analysis, kept because it is the map for any return.
 Twenty-two profiled launches, medians with confidence intervals, tooling in
 `knowledge-base/tools/` (`measure-startup.py`, `profiles.py`, `timeit.py`,
 `builtin_calls.py`).
@@ -49,13 +47,11 @@ init -- is *not* on any hot stack. The cost is glyph atlases: `default` (every s
 the game) decompresses in 0 ms, while `font_chi` takes ~11 s, `font_jp` ~9.9 s,
 `font_kr` ~4.1 s, `font_cyr` ~1.6 s, `font_lat` ~1.0 s.
 
-- [ ] **The open question: does declining an atlas actually save time?** Skipping the
-      whole prefetch does not -- pages decompress on first draw instead, which is why the
-      splash grows when it is skipped. But an atlas for a script that is *never drawn*
-      should never be decompressed at all. `[feature.font_atlases]` already declines
-      chosen atlases and is off by default awaiting exactly this measurement. Batches
-      each way with `measure-startup.py --with fast_boot,font_atlases`, then
-      `profiles.py`. **This is the next thing to do.**
+**The atlas-decline question is answered (no) — see the quarantine README.** Declining
+never-drawn atlases saves nothing at boot; the cost is atlas *generation*
+(`GENERATE_FONTS` / `__scribble_font_add_from_project`), not the prefetch upload, which
+is where the two hot functions below likely live.
+
 - [ ] **Why is font baking sometimes free?** `scribble_font_bake_shader` averages 7.8% of
       init but ranges 0-11% across runs -- present on some launches, absent on others.
       A cache that is sometimes warm would be both the explanation and a fix.
@@ -127,8 +123,8 @@ investigate; a fix may need a code patch, which the kit can now do safely.
 
 ### Fortifications: three behaviours, one built
 
-- [x] **Stop granting at the cap.** Shipped as `[feature.fortifications_cap]` in the QoL
-      mod, **default off** because it takes power away from a save that already has it.
+- [x] **Stop granting at the cap.** Shipped as `[feature.fortifications_cap]` in the
+      bugfixes mod (this file used to say QoL, which was never true), **default off** because it takes power away from a save that already has it.
       A `call rel32` at `0x13c860d` into a counting stub, and a 9-byte `jmp` over the
       gate at `0x13c8542` once the count reaches `cap` (default 100), reverted on
       returning to the menu. No arithmetic is needed to find "non-brick max + 100":
@@ -165,21 +161,25 @@ investigate; a fix may need a code patch, which the kit can now do safely.
       castle only exists inside a run, so activation and the arithmetic are verified but
       the patch going in during play is not.
 
-- [ ] **Cap per Brick Factory rather than per run.** `non_brick_max + 100 x (factories
-      currently in the castle)`, so each factory raises the ceiling Fortifications may
-      fill instead of filling a shared one faster. Destroying a factory lowers the
-      ceiling but **not** current max HP — which is what stops build-fill-demolish-rebuild
-      from farming the cap, and stops removing a building from punishing the player
-      retroactively. Documented for the devs in
+- [x] **Cap per Brick Factory rather than per run. Done, and the default.**
+      `fortifications_cap` reads `Allowance::PerFactory` (config `cap = per_factory`, the
+      default; `total` is the strict alternative): the ceiling is
+      `non_brick_max + 100 × (factories currently standing)`, counted live via
+      `instance::count(obj_improvement_wall_repairs)` each tick. Destroying a factory
+      lowers the ceiling but **not** current max HP — the feature never lowers `hp_max` —
+      so build-fill-demolish-rebuild cannot farm the cap and removing a building is never
+      punished retroactively. Unit-tested (`the_allowance_is_one_of_two_named_values`).
+      Documented for the devs in
       [`for-the-developers/brick-factory-fortifications.md`](for-the-developers/brick-factory-fortifications.md).
-      In the kit this is a change to what the counter is compared against, plus tracking
-      the live factory count, so it builds on what is already there.
+      Same live-run caveat as the parent feature: activation and arithmetic verified, the
+      patch firing during a long run is not.
 
 
-### Fast boot and fonts: a real cost, an unproven saving
+### Fonts and startup: the analysis (features quarantined)
 
-Timing `texture_prefetch` one group at a time, from the menu, with the boot prefetch
-suppressed:
+The two startup features are parked — [`quarantine/README.md`](quarantine/README.md).
+What is worth keeping is the game-side measurement. Timing `texture_prefetch` one group
+at a time, from the menu, with the boot prefetch suppressed:
 
 ```text
 default                     0 ms      <- every sprite in the game
@@ -191,30 +191,15 @@ font_jp                  9933 ms
 font_chi                11002 ms
 ```
 
-**The game's art is free; ~26.5s is glyph atlases.** That part is solid — each figure is
-a direct measurement of one call.
+**The game's art is free; ~26.5s is glyph atlases.** Each figure is a direct measurement
+of one call. But the overnight batch (in the quarantine README) showed that *declining*
+those atlases at boot saves nothing measurable — because `texture_prefetch` only
+*uploads* an atlas the game has already built in `GENERATE_FONTS` /
+`USE_DYNAMIC_TEXTURES_FOR_FONTS` (`obj_init`) and `__scribble_font_add_from_project`
+(8.3% of the init window), which run regardless. So the atlas **generation** is the real
+cost, and `sub_1c9fd30` / `sub_1ca3ab0` (below) are its likely home — the one worthwhile
+lead if startup is ever revisited.
 
-Shipped as `[feature.font_atlases]` in the QoL mod: one switch per script, Latin
-included on the same terms (only its default differs, since it is what the menu is drawn
-in). It provably declines the ones you switch off — the log names each.
-
-**It is off by default, because the saving is not demonstrated.** First A/B, one run
-each: 51.5s to the menu with it on, 41.5s with it off. Run-to-run spread on the same
-machine was 36-56s, so a single pair proves nothing either way — but it certainly does
-not prove a win.
-
-- [~] **Settle it with repeated runs.** `knowledge-base/tools/timeit.py` now does this:
-      launches N times, reads the main-menu timestamp from the timeline, reports every
-      run plus median and **spread**. Flipping the setting between batches is left to the
-      caller so that what is being compared is explicit. Until a batch has been run each
-      way, every startup number in this repository — including `fast_boot`'s "25%
-      faster" — rests on single runs and should be treated as a hypothesis.
-- [ ] **Test the structural doubt.** `texture_prefetch` *uploads* an atlas the game has
-      already built. Building it is `GENERATE_FONTS` / `USE_DYNAMIC_TEXTURES_FOR_FONTS`
-      in `obj_init` and `__scribble_font_add_from_project` (8.3% of the init window),
-      which run whether or not anything prefetches. If so, declining the upload saves
-      nothing and merely moves it to first draw — which would explain the A/B, and would
-      mean the atlas *generation* is the thing to attack.
 - [ ] **Name the two hot functions.** `sub_1c9fd30` (28.5% of startup samples) and
       `sub_1ca3ab0` (17.2%) — 45.7% between them, and ~73% of startup is inside the
       game's own code rather than waiting on disk or GPU, so this is computation. Both
@@ -225,13 +210,37 @@ not prove a win.
 
 ---
 
-## Blocked: the kit cannot draw yet
+## Unblocked: the kit can draw now
 
-Four items share one dependency. Nothing else stands in their way.
+The drawing dependency below is **resolved** (2026-08-14). `tkiw_runtime::overlay`
+is a reusable drawing tool — a register-preserving trampoline into
+`obj_display_manager`'s Draw GUI End, with shape primitives (rectangle, line,
+circle) that call the game's own draw builtins with the ambient state preserved.
+Proved on screen: a black square drawn on top of the game UI, following the
+hovered unit. Docs: [`knowledge-base/drawing.md`](knowledge-base/drawing.md).
+**Text is the one gap** — `draw_text` needs a constructed GML string, deferred
+until it can be proved on screen; that is the next thing for the tooltip items.
 
-- [ ] **Unit stats on mouseover** — range, attack rate, damage per attack, attack
-      animation delay. The fields exist on `obj_unit_parent`: `attack_radius`,
-      `attack_time` (with `attack_spd_multi`), `attack_action_frame`, `attack_img_speed`.
+These four items now need only their data plumbing and a text primitive.
+
+- [~] **Unit stats on mouseover** — **built and boot-verified; needs one on-screen
+      look.** Shipped as the `gameplay` plugin mod (`tkiw-gameplay-plugin`), feature
+      `unit_stats`. Draws a small panel when a unit is hovered: **Range** (`attack_radius`,
+      raw), **Rate** (`(60/attack_time) × attack_spd_multi` per second), **Hit** (modified
+      damage per swing, `dps_modified / rate`). The hovered unit is found the game's own
+      way (`obj_cursor.hovered_unit_instance`); `dps_modified` is read from the cursor's
+      `hovered_unit_damage` where the game already computed it, so `Rate × Hit` reconstructs
+      the DPS the game's own popup shows. All numbers come from proven field reads — no
+      unit-struct method call. Autonomously verified: the plugin loads beside bugfixes and
+      the picker, activates, the draw-host signature matches, the detour installs, the text
+      self-test passes, and the game boots to the menu with it live. **Unverified until a
+      hover in a real run** (needs eyes): the panel actually on screen, and — flagged
+      honestly — the `attack_spd_multi` direction, which was exactly `1` on every probed
+      unit, so the split between Rate and Hit is only *unverified*, never *wrong*, for a
+      speed-modded unit. **Not yet published** (launch scope is bugfixes + auto-picker); it
+      is a built plugin awaiting that on-screen validation. Attack animation delay
+      (`attack_action_frame` is an array, `attack_img_speed`) deferred: its semantics want
+      the same in-run check before I trust a derived number.
 - [ ] **Modified production speed on building mouseover**, with every modifier applied.
       Consider showing `resource/s` rather than `s/resource` for late Leo saves, where
       the latter goes uselessly small.
@@ -240,15 +249,26 @@ Four items share one dependency. Nothing else stands in their way.
       auto-build on expiry, cancellable. Only the greyed-out-blueprint part needs
       drawing; the queue and the auto-build do not.
 
-### The dependency, and why it is now cheap
+### The dependency, resolved
 
-The kit's only foothold is the `PeekMessageW` hook, which runs *after* a frame is
-drawn, so it cannot draw. The way through is a detour into a Draw event.
+The kit's only foothold was the `PeekMessageW` hook, which runs *after* a frame is
+drawn, so it could not draw. The way through was a detour into a Draw event —
+**now built and proved on screen**. `tkiw_runtime::trampoline` is the
+register-preserving detour (`popup_stutter_fix` had built the cave, the patch and
+the in-Draw `call`; the trampoline adds the register preservation and the
+call-back-into-Rust), and `tkiw_runtime::overlay` is the tool on top of it. Only
+`draw_text` remains, which needs a constructed GML string.
 
-**`popup_stutter_fix` already built most of it**: a code-cave allocator that lands
-within `call rel32` reach, verified byte patching with revert, and a proven `call` from
-inside a live Draw event into a stub. What remains is making the stub call back into
-Rust with registers preserved, and calling the game's own text drawing from there.
+**The recon is done** (2026-08-14): the `draw_probe` diagnostic writes
+`tkiw-momomod-kit/draw-probe.md` — every draw builtin resolved, the font table
+(fonts are asset refs, `ref_type 0x1000006`), GUI metrics, and per-phase liveness
+of every GUI-layer/bracket Draw event. Candidate hosts, alive from init through
+menu: `obj_display_manager` (Draw GUI End + Pre-Draw), `obj_cursor` (Draw GUI),
+`obj_mouse_interaction_controller` (Draw GUI End), `obj_post_processing`
+(Post-Draw), with prologue bytes recorded for the detour design. Run-phase
+liveness lands automatically the next time someone plays with diagnostics on.
+The absent-variable hazard experiment is implemented behind
+`draw_probe.absent_read` and has deliberately not been run yet.
 
 Groundwork, objects and variables per feature:
 [`tkiw-momomod-kit/analysis/gameplay-features.md`](tkiw-momomod-kit/analysis/gameplay-features.md).
@@ -286,9 +306,13 @@ Valuable tidying; nothing depends on any of it.
       their files on each read and commented out so that uncommenting a line is an
       override the player made on purpose. A pre-`config/` `momomod.ini` is migrated
       rather than reset.
-- [x] **Mods split by kind.** `qol` (fast_boot, popup_stutter_fix) and `bugfixes`
-      (morale_fix, fortifications_cap) are separate mods with separate files, so a player
-      can take the pleasantness without the rule changes.
+- [x] **Mods split by kind.** `optimization` (now just `popup_stutter_fix`, after
+      fast_boot and font_atlases were quarantined 2026-08-15) and `bugfixes` (morale_fix,
+      fortifications_cap) are separate mods with separate files, so a player can take the
+      pleasantness without the rule changes. Split again 2026-08-14: the mod formerly
+      called `qol` is now `optimization`. The `gameplay` mouseover mod became a plugin DLL
+      (`unit_stats`), not an internal mod. A `qol.ini` and an old `[mods]` line naming
+      `qol` are migrated automatically.
 - [x] **A window to set it up.** `configure.py`: one tab per mod, in the order the kit
       lists them, checkboxes for booleans, spin and text boxes otherwise, scrollable, an
       Apply button. No schema of its own — the widget comes from the value in the file
@@ -335,6 +359,45 @@ Valuable tidying; nothing depends on any of it.
 - [ ] **Shared minimal install/uninstall UI** for every mod at once.
 - [ ] **Keep track of which of my mods are installed** — an install script that reports
       the whole picture rather than one mod at a time.
+
+---
+
+## Third-party mods: integrate jacobubos's two mods (permission granted)
+
+- [ ] **Integrate [Dev Mode](https://github.com/jacobubos/TKIW-Dev-Mode) and the
+      [Custom Wave Editor](https://github.com/jacobubos/TKIW-Custom-Wave-Editor) into the
+      mod manager.** The author (jacobubos) has **given permission** (Amaury, 2026-08-15).
+      Goal: a player installs/enables/configures these from momomod alongside our own mods.
+
+      **The catch is that they are a different stack.** Both are C++ DLLs on
+      **Aurie 2.0.2 + YYToolkit 4.0.1** (loaded from `mods\aurie\`), where momomod is a Rust
+      proxy-DLL loader (`mfreadwrite.dll` + `plugin_host`) that loads mods conforming to our
+      four-export ABI from its own `mods/` folder. So "integrate" needs a decision on *how* —
+      the three plausible shapes:
+      1. **Manage-in-place.** momomod's manager (`manage-mods.py`) learns to install Aurie
+         + these DLLs into `mods\aurie\`, and to enable/disable/configure them there, while
+         **Aurie still does the loading**. Lowest effort, keeps the author's binaries as-is,
+         but momomod is now managing two loaders.
+      2. **Bootstrap Aurie as a managed dependency.** momomod ships/loads Aurie itself so
+         there is one install flow, and treats Aurie mods as a second mod class next to our
+         ABI plugins.
+      3. **Port to our stack.** Dev Mode is ~trivial on `tkiw-runtime` (set `DEV_MODE_ENABLED`
+         around the dev-controller step). The Wave Editor is mostly a data-CSV editor over
+         `parameters/Wave_{presets,templates}_*.csv` + a substantial UI — a real port, not a
+         weekend. Only sensible with the author's blessing on a reimplementation.
+
+      **Settle before building:**
+      - **Coexistence.** Aurie's injector vs our `mfreadwrite` proxy both patching one
+        GameMaker process — verify they load side by side without fighting (esp. if both
+        hook runtime events) before relying on both. Not yet tested; game folder is clean of
+        Aurie today.
+      - **Licensing.** Aurie + YYToolkit are **AGPL-3.0**. Bundling/depending on them pulls
+        AGPL obligations toward whatever links them; check the two mods' own licenses too.
+        Shipping the author's prebuilt binaries (option 1/2) is lighter on this than linking.
+      - **Data-mod capability (spun out of this).** The Wave Editor showed campaign content
+        lives in hand-editable `parameters/*.csv`. A general **data-mod class** for momomod
+        (install/back-up/restore a set of game CSVs, no code patch, no signature to break) is
+        an orthogonal, lower-risk feature this could ride on — worth its own item if pursued.
 
 ---
 

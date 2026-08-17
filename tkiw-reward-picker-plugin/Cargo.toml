@@ -1,0 +1,16 @@
+[package]
+name = "tkiw_reward_picker_plugin"
+description = "The reward auto-picker as a momomod-loadable mod DLL"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "tkiw_reward_picker_plugin"
+# A cdylib: this is the DLL momomod loads from its mods folder. The picking logic
+# lives in the rlib it wraps; this crate is only the four ABI exports.
+crate-type = ["cdylib"]
+
+[dependencies]
+tkiw_plugin = { path = "../tkiw-plugin" }
+tkiw_reward_picker = { path = "../tkiw-reward-auto-picker" }
+tkiw_runtime = { path = "../tkiw-runtime" }

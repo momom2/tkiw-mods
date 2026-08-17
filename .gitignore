@@ -46,3 +46,7 @@ tkiw-reward-auto-picker/docs/*.json
 **/profiles/
 **/*.ini.premeasure
 **/profile.csv
+
+# Written for Claude, not for human consumption: session notes, war stories,
+# reasoning-in-progress. Kept locally, never published.
+/notes-for-claude/
