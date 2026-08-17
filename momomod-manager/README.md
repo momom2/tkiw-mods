@@ -1,9 +1,8 @@
 # momomod — a mod manager for The King is Watching
 
 momomod installs, loads and manages mods for *The King is Watching*. On its own
-it changes nothing about the game: it is a manager. You install it once, then
-download the mods you want; it loads them when the game starts, and each mod can
-be switched on and off and configured to taste.
+it doesn't impact gameplay. You can use it to download and en/disable and edit 
+the config of the mods you want.
 
 Ask momom2 on Hypnohead's Discord server for support if needed.
 
@@ -12,8 +11,7 @@ Ask momom2 on Hypnohead's Discord server for support if needed.
 Needs Python 3.8+ (for the installer and the two windows). The mods themselves
 have no dependencies.
 
-**1. Install the manager.** One file is added to the game folder; the game's own
-files are never touched.
+**1. Install the manager.**
 
 ```bash
 python install.py
@@ -33,8 +31,13 @@ the game until you say so. This window turns them on and adjusts their settings.
 python configure.py
 ```
 
+You can also edit the mods' configs directly in their respective folders, which
+usually reveals more tunable parameters for those who have very detailed preferences
+and don't mind to get a bit technical.
+
 Installed mods load the next time the game starts. That is the whole loop:
 **install momomod → download mods → configure them.**
+
 
 ## The mods
 
@@ -144,5 +147,5 @@ would leak the builder's folder to everyone who downloaded it.
 
 ## Clanker disclaimer
 
-This project was realized by Claude, long may it code.
+This project was realized by Claude (Opus 5 and Fable 5), long may it code.
 Don't use it if you refuse to interact with AI-generated code.
