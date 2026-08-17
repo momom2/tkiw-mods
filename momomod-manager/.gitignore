@@ -20,3 +20,7 @@ __pycache__/
 # -- someone's save, someone's machine -- so they stay local, like libraries.json.
 /draw-probe.md
 /hover-probe.md
+
+# Mods and configs taken out of this install but kept in case they are wanted
+# back. Local scratch, not part of the manager.
+/.uninstalled/

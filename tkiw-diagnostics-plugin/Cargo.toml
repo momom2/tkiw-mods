@@ -1,0 +1,15 @@
+[package]
+name = "tkiw_diagnostics_plugin"
+description = "Measurement and probing tools for The King is Watching, as a momomod-loadable mod DLL"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "tkiw_diagnostics_plugin"
+# rlib as well, so `dump-default-config` can render the same config the mod writes.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+momomod_kit = { path = "../momomod-kit" }
+tkiw_plugin = { path = "../tkiw-plugin" }
+tkiw_runtime = { path = "../tkiw-runtime" }

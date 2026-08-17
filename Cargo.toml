@@ -9,6 +9,7 @@ members = [
     "tkiw-reward-picker-plugin",
     "tkiw-bugfixes-plugin",
     "tkiw-gameplay-plugin",
+    "tkiw-diagnostics-plugin",
 ]
 
 # Every mod in the repository is a member and depends on `tkiw-runtime`, so one

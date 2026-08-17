@@ -10,8 +10,8 @@ end-to-end test of the mod manager.
 A release's assets, all uploaded to the **same** GitHub release:
 
     momomod-<version>.zip         the manager, for players
-    momomod-<version>-modder.zip  the same, with the diagnostics visible (off, but
-                                  shown in the settings window) for people making mods
+    momomod-<version>-modder.zip  the same, with the diagnostics mod included, for
+                                  people making mods (it is not in the catalogue)
     catalog.json                  the list of mods the manager offers
     reward-picker.dll             \  the mods themselves, named <mod>.dll, which
     bugfixes.dll                  /  manage-mods.py downloads into the player's mods/
@@ -70,8 +70,13 @@ MOD_DLL = {
 #
 # A self-configuring mod (the auto-picker, which builds its file from the live
 # game) is deliberately absent.
+#
+# `(crate, bin)`. The bin is named after the mod rather than a shared
+# `dump-default-config`: two crates with a bin of the same name compile to the
+# same `target/release/dump-default-config.exe` and clobber each other, which
+# silently staged the diagnostics' config as the bugfixes one.
 MOD_DEFAULT_CONFIG = {
-    "bugfixes": "tkiw_bugfixes_plugin",
+    "bugfixes": ("tkiw_bugfixes_plugin", "dump-bugfixes-config"),
 }
 
 
@@ -106,23 +111,23 @@ def stage():
     shutil.copy(os.path.join(dist, newest), os.path.join(RELEASE, newest))
     staged.append(newest)
 
-    # The modder variant: the same manager, plus a ready-made `config/momomod.ini`
-    # with the developer diagnostics set to `false` (off, but visible in the
-    # settings window) instead of `hidden` (off and invisible, which is what a
-    # player should get). The manager never overwrites an existing config, so
-    # shipping one is all it takes -- no second build, no compiled-in variation.
+    # The modder variant: the same manager, with the diagnostics mod already in
+    # `mods/`. Those tools are deliberately absent from the published catalogue --
+    # a player has no use for a profiler that stops the game's thread a thousand
+    # times a second -- so this zip is how someone working on a mod gets them.
+    #
+    # It arrives switched off, like any mod: the plugin writes its own config on
+    # first launch with everything off, and the settings window shows it from then
+    # on. (It used to be a config line flipping `hidden` to `false`, back when the
+    # diagnostics were compiled into the manager and shipped to everyone. Now they
+    # are simply not in a player's install, which is why `hidden` could go.)
     modder = newest[: -len(".zip")] + "-modder.zip"
     shutil.copy(os.path.join(RELEASE, newest), os.path.join(RELEASE, modder))
-    kit_ini = subprocess.run(
-        ["cargo", "run", "-q", "--release", "--bin", "dump-config", "--", "momomod"],
-        cwd=MANAGER, capture_output=True, text=True, check=True,
-    ).stdout
-    if "diagnostics = hidden" not in kit_ini:
-        sys.exit("error: the kit config no longer says `diagnostics = hidden`, so the\n"
-                 "       modder variant cannot be derived from it. Check MODS defaults.")
-    kit_ini = kit_ini.replace("diagnostics = hidden", "diagnostics = false")
+    diagnostics = os.path.join(BUILT, "tkiw_diagnostics_plugin.dll")
+    if not os.path.isfile(diagnostics):
+        sys.exit("error: the diagnostics plugin is not built (looked for %s)" % diagnostics)
     with zipfile.ZipFile(os.path.join(RELEASE, modder), "a", zipfile.ZIP_DEFLATED) as z:
-        z.writestr("config/momomod.ini", kit_ini)
+        z.write(diagnostics, "mods/diagnostics.dll")
     staged.append(modder)
 
     # the catalogue
@@ -138,12 +143,18 @@ def stage():
         staged.append(mod + ".dll")
 
     # each mod's default config, rendered by the mod itself
-    for mod, crate in MOD_DEFAULT_CONFIG.items():
+    for mod, (crate, binary) in MOD_DEFAULT_CONFIG.items():
         out = os.path.join(RELEASE, mod + ".default.ini")
         run(["cargo", "run", "-q", "--release", "-p", crate,
-             "--bin", "dump-default-config", "--", out], cwd=ROOT)
+             "--bin", binary, "--", out], cwd=ROOT)
         if not os.path.isfile(out):
             sys.exit("error: %s did not render a default config" % mod)
+        # It is this mod's document, not another's: a bin-name collision once
+        # staged the wrong one, and the file looks perfectly valid either way.
+        head = open(out, encoding="utf-8").readline().strip()
+        if head != "# " + mod:
+            sys.exit("error: %s.default.ini begins %r, not '# %s' -- the wrong mod's\n"
+                     "       config was rendered." % (mod, head, mod))
         staged.append(mod + ".default.ini")
 
     print("\nstaged into %s:" % RELEASE)

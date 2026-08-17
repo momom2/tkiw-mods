@@ -34,14 +34,15 @@ momomod-kit/              the modding framework on top of runtime+plugin: the Fe
   the manager
 momomod-manager/          the mod manager: the mfreadwrite.dll proxy loader, plugin_host,
                           the install/enable/configure Python (install.py, manage-mods.py,
-                          configure.py), and internal developer-only features (diagnostics,
-                          popup_stutter_fix), all hidden
+                          configure.py), and one compiled-in feature, popup_stutter_fix
 
   the mods (each a plugin DLL)
 tkiw-bugfixes-plugin/     morale_fix + fortifications_cap                     [published]
 tkiw-reward-picker-plugin/ the auto-picker as a plugin                         [published]
 tkiw-reward-auto-picker/  the picker's core logic (rlib the plugin links)
 tkiw-gameplay-plugin/     unit-stats-on-hover overlay          [built, not yet published]
+tkiw-diagnostics-plugin/  timeline, profiler and the three probes. Measures the game
+                          and changes nothing.       [unpublished; in the modder zip]
 
   releasing
 stage-release.py          builds and stages everything a release ships

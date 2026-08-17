@@ -185,25 +185,12 @@ def file_blurb(lines):
     return paragraphs[1] if len(paragraphs) > 1 else ""
 
 
-def hidden_mods():
-    """Mods marked `hidden` under `[mods]` in the kit's file, lowercased.
-
-    Hidden is the kit's third state beside true and false: the mod is off, and
-    this window shows neither its tab nor its row -- for mods in construction
-    or not yet validated. There is deliberately no widget for it; it is set and
-    unset by editing the file, so a player cannot hide a mod by accident.
-    """
-    path = os.path.join(CONFIG_DIR, KIT_FILE)
-    if not os.path.isfile(path):
-        return set()
-    hidden = set()
-    for section, _blurb, settings in parse(path)[0]:
-        if section.lower() != "mods":
-            continue
-        for s in settings:
-            if s.value.strip().lower() == "hidden":
-                hidden.add(s.key.lower())
-    return hidden
+# `hidden` -- a third state beside true and false, which hid a mod's tab as well
+# as switching it off -- has been retired. It suppressed the display of something
+# that might still be running (it never governed the plugins the manager loads),
+# so a mod could act while this window insisted it did not exist. A mod nobody
+# should meet yet is now simply absent from the catalogue and the release. Any
+# `hidden` left in a config still reads as off; it just no longer hides anything.
 
 
 def write_values(path, changes):
@@ -296,9 +283,9 @@ def build(tk, ttk):
             the way the manager lists them, so there is no second ordering to forget
             to update.
 
-            A mod marked `hidden` under `[mods]` gets no tab at all: hidden means
-            off and invisible here, for a mod in construction or not yet
-            validated. It comes back by editing the manager's file by hand.
+            **Every mod with a config file gets a tab.** Nothing is suppressed: a
+            mod that is installed and possibly running must be visible, or the
+            window becomes a thing that lies about what the game is doing.
             """
             if not os.path.isdir(CONFIG_DIR):
                 return []
@@ -306,7 +293,6 @@ def build(tk, ttk):
                 f for f in os.listdir(CONFIG_DIR)
                 if f.endswith(".ini") and not f.endswith(".reference.ini")
             )
-            hidden = hidden_mods()
             order = []
             if KIT_FILE in names:
                 # Read but not shown: take its [mods] order, give it no tab.
@@ -320,11 +306,7 @@ def build(tk, ttk):
                             names.remove(wanted)
                             order.append(wanted)
             # anything the kit did not mention still gets a tab, alphabetically
-            return [
-                os.path.join(CONFIG_DIR, n)
-                for n in order + names
-                if os.path.splitext(n)[0].lower() not in hidden
-            ]
+            return [os.path.join(CONFIG_DIR, n) for n in order + names]
 
         def reload(self):
             for tab in self.tabs.tabs():

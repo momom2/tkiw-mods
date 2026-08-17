@@ -50,8 +50,8 @@ use tkiw_runtime::{
     Runtime,
 };
 
-use crate::config::Section;
-use crate::feature::{Cadence, Feature, Requirements};
+use momomod_kit::config::Section;
+use momomod_kit::feature::{Cadence, Feature, Requirements};
 
 /// The builtins the drawing detour plans to call, per the conventions document.
 /// Presence is reported, not required: a missing one shrinks the design space
@@ -235,6 +235,25 @@ impl Feature for DrawProbe {
     fn summary(&self) -> &'static str {
         "Collects various data - draw builtins, fonts, GUI metrics, and which objects' \
          GUI draw events are alive in each phase - into a report file."
+    }
+
+    fn config_template(&self) -> &'static str {
+        "# How often to sample which draw-event objects are alive, in milliseconds.\n\
+         interval_ms = 1000\n\
+         # How many font ids to check for, listing those that exist. 0 skips.\n\
+         fonts = 64\n\
+         # Name of the output file, within the mod folder.\n\
+         file = draw-probe.md\n\
+         \n\
+         # advanced: for working on the diagnostic itself. Set these here; the\n\
+         # settings window does not show them.\n\
+         # The deliberate experiment: ONE read of a variable proven absent on one\n\
+         # instance, to learn whether the getter survives it. May end the session.\n\
+         absent_read = false\n\
+         # The instance and variable the experiment uses. The variable must exist in\n\
+         # the game's code but not on this object.\n\
+         absent_object = obj_main_menu\n\
+         absent_var = main_product\n"
     }
 
     fn requires(&self) -> Requirements {
@@ -785,11 +804,11 @@ mod tests {
     #[test]
     fn config_rejects_paths_and_wild_intervals() {
         let mut probe = DrawProbe::default();
-        let bad = crate::config::Config::parse("[feature.draw_probe]\nfile = ..\\evil.md\n");
+        let bad = momomod_kit::config::Config::parse("[feature.draw_probe]\nfile = ..\\evil.md\n");
         assert!(probe.configure(&bad.section("draw_probe")).is_err());
-        let bad = crate::config::Config::parse("[feature.draw_probe]\ninterval_ms = 5\n");
+        let bad = momomod_kit::config::Config::parse("[feature.draw_probe]\ninterval_ms = 5\n");
         assert!(probe.configure(&bad.section("draw_probe")).is_err());
-        let good = crate::config::Config::parse(
+        let good = momomod_kit::config::Config::parse(
             "[feature.draw_probe]\ninterval_ms = 500\nfonts = 32\nabsent_read = true\n",
         );
         assert!(probe.configure(&good.section("draw_probe")).is_ok());

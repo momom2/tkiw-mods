@@ -47,8 +47,8 @@ use tkiw_runtime::{
     Runtime,
 };
 
-use crate::config::Section;
-use crate::feature::{Cadence, Feature, Requirements};
+use momomod_kit::config::Section;
+use momomod_kit::feature::{Cadence, Feature, Requirements};
 
 /// Members listed per dump. Units carry 625 (measured); the bound exists so a
 /// runaway enumeration truncates loudly rather than writing a megabyte. The
@@ -106,6 +106,21 @@ impl Feature for HoverProbe {
 
     fn summary(&self) -> &'static str {
         "Records what the cursor hovers over in-game."
+    }
+
+    fn config_template(&self) -> &'static str {
+        "# How often to check what is hovered, in milliseconds.\n\
+         interval_ms = 250\n\
+         # Name of the output file, within the mod folder.\n\
+         file = hover-probe.md\n\
+         \n\
+         # advanced: for working on the diagnostic itself. Set these here; the\n\
+         # settings window does not show them.\n\
+         # The object whose Step records what is hovered, and the member holding it.\n\
+         holder = obj_cursor\n\
+         pointer = hovered_unit_instance\n\
+         # Members of the holder to record with each dump (the panel's own values).\n\
+         extras = hovered_unit_hp, hovered_unit_damage\n"
     }
 
     fn requires(&self) -> Requirements {
@@ -380,18 +395,18 @@ mod tests {
     #[test]
     fn config_parses_and_rejects_junk() {
         let mut p = HoverProbe::default();
-        let good = crate::config::Config::parse(
+        let good = momomod_kit::config::Config::parse(
             "[feature.hover_probe]\nholder = obj_cursor\npointer = hovered_unit_instance\n\
              extras = hovered_unit_hp, hovered_unit_damage\n",
         );
         assert!(p.configure(&good.section("hover_probe")).is_ok());
         assert_eq!(p.extras.len(), 2);
 
-        let bad = crate::config::Config::parse("[feature.hover_probe]\nholder = cursor\n");
+        let bad = momomod_kit::config::Config::parse("[feature.hover_probe]\nholder = cursor\n");
         assert!(p.configure(&bad.section("hover_probe")).is_err());
-        let bad = crate::config::Config::parse("[feature.hover_probe]\npointer = Not A Var\n");
+        let bad = momomod_kit::config::Config::parse("[feature.hover_probe]\npointer = Not A Var\n");
         assert!(p.configure(&bad.section("hover_probe")).is_err());
-        let bad = crate::config::Config::parse("[feature.hover_probe]\nfile = a\\b.md\n");
+        let bad = momomod_kit::config::Config::parse("[feature.hover_probe]\nfile = a\\b.md\n");
         assert!(p.configure(&bad.section("hover_probe")).is_err());
     }
 }

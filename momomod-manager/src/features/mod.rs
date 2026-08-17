@@ -20,20 +20,19 @@
 use crate::config::ModState;
 use crate::feature::Feature;
 
-// The manager compiles in only its own internal mods now: the optimization
-// experiments (unproven, hidden) and the diagnostics (developer tools). The
-// published mods -- bugfixes and the auto-picker -- are separate plugin DLLs a
-// player downloads; see [`PUBLISHED`].
-pub mod draw_probe;
-pub mod dump_libraries;
-pub mod hover_probe;
+// One compiled-in feature is left: the stutter fix. Everything else a player can
+// have is a separate plugin DLL they download (see [`PUBLISHED`]), and everything
+// that is *not* for players is a plugin too, so it is simply absent from their
+// install rather than present-but-suppressed.
 pub mod popup_stutter_fix;
-pub mod profiler;
-pub mod timeline;
 
-// `fast_boot` and `font_atlases` are parked in `quarantine/` at the repo root --
-// not compiled, not loaded, not shipped. See that folder's README. font_atlases
-// went with fast_boot because it cannot work without it.
+// Elsewhere, and on purpose:
+// * the diagnostics (timeline, profiler, dump_libraries, draw_probe, hover_probe)
+//   are `tkiw-diagnostics-plugin`, unpublished -- a modder builds it and drops the
+//   DLL in `mods/`. They used to live here, kept from players by a `hidden` state
+//   that never governed plugin loading and could therefore lie about what was
+//   running; moving them out is what let that state be deleted.
+// * `fast_boot` and `font_atlases` are parked in `quarantine/` at the repo root.
 
 /// A shippable mod: a config file, and the features that file governs.
 pub struct ModInfo {
@@ -44,9 +43,6 @@ pub struct ModInfo {
     /// One paragraph for the kit's file, where a player chooses what to load.
     pub blurb: &'static str,
     /// What the kit does with it when `config/momomod.ini` says nothing.
-    ///
-    /// `Hidden` is for a mod still in construction or not yet validated: not
-    /// loaded, and left out of the config window until someone edits the file.
     pub default: ModState,
     /// The name this mod used to ship under, if it was ever renamed.
     ///
@@ -66,31 +62,20 @@ pub struct ModInfo {
 
 /// The manager's own compiled-in mods.
 ///
-/// Not the published ones -- those (bugfixes, the auto-picker) are separate
-/// plugin DLLs; see [`PUBLISHED`]. What remains here is internal: the unproven
-/// optimization experiments and the developer diagnostics, all `Hidden`, so a
-/// player never meets them and a developer reaches them by editing the file.
-pub const MODS: &[ModInfo] = &[
-    ModInfo {
-        name: "optimization",
-        title: "Optimization",
-        blurb: "Makes the game faster without changing anything it does: faster \
-                startup, and fixes for stutter. Formerly the qol mod. Not published: \
-                its startup savings are unproven.",
-        default: ModState::Hidden,
-        formerly: Some("qol"),
-        self_configuring: false,
-    },
-    ModInfo {
-        name: "diagnostics",
-        title: "Measurement tools",
-        blurb: "Collects data when the game launches and while it runs, and logs it for \
-                offline analysis. Does not impact gameplay but can slow down the game.",
-        default: ModState::Hidden,
-        formerly: None,
-        self_configuring: false,
-    },
-];
+/// Not the published ones -- those (bugfixes, the auto-picker) are separate plugin
+/// DLLs; see [`PUBLISHED`]. One is left here: the stutter fix, off until someone
+/// turns it on. Whether a player can *have* a mod is now decided by whether it is
+/// in the catalogue and the release, not by a state in this file.
+pub const MODS: &[ModInfo] = &[ModInfo {
+    name: "optimization",
+    title: "Optimization",
+    blurb: "Makes the game faster without changing anything it does. Currently one \
+            fix, for the stutter the floating resource numbers cause. Not yet \
+            published as a downloadable mod.",
+    default: ModState::Off,
+    formerly: Some("qol"),
+    self_configuring: false,
+}];
 
 /// A mod the manager offers players in the mod manager.
 ///
@@ -122,18 +107,12 @@ pub const PUBLISHED: &[Published] = &[
     },
 ];
 
-/// Every feature, in the order a player should meet them.
+/// Every feature the manager itself carries.
+///
+/// One, now: the diagnostics moved to their own plugin and the two startup
+/// experiments are quarantined.
 pub fn all() -> Vec<Box<dyn Feature>> {
-    vec![
-        // Real features first; the diagnostics are not really features.
-        // (fast_boot and font_atlases are quarantined -- see quarantine/README.md)
-        Box::new(popup_stutter_fix::PopupStutterFix::default()),
-        Box::new(timeline::Timeline::default()),
-        Box::new(profiler::Profiler::default()),
-        Box::new(dump_libraries::DumpLibraries::default()),
-        Box::new(draw_probe::DrawProbe::default()),
-        Box::new(hover_probe::HoverProbe::default()),
-    ]
+    vec![Box::new(popup_stutter_fix::PopupStutterFix::default())]
 }
 
 /// Just the names, for config validation and tests. Must agree with [`all`].
@@ -202,56 +181,6 @@ fn extra_keys(name: &str) -> &'static str {
             "# Distinct fade levels for the text. Fewer is cheaper, steppier.\n\
              steps = 10\n"
         }
-        "timeline" => {
-            "# Period of the check. Precision of the timeline. Each check costs ~2ms.\n\
-             interval_ms = 500\n"
-        }
-        "dump_libraries" => {
-            "# Name of the output file, within the mod folder.\n\
-             file = libraries.json\n"
-        }
-        "hover_probe" => {
-            "# How often to check what is hovered, in milliseconds.\n\
-             interval_ms = 250\n\
-             # Name of the output file, within the mod folder.\n\
-             file = hover-probe.md\n\
-             \n\
-             # advanced: for working on the diagnostic itself. Set these here; the\n\
-             # settings window does not show them.\n\
-             # The object whose Step records what is hovered, and the member holding it.\n\
-             holder = obj_cursor\n\
-             pointer = hovered_unit_instance\n\
-             # Members of the holder to record with each dump (the panel's own values).\n\
-             extras = hovered_unit_hp, hovered_unit_damage\n"
-        }
-        "draw_probe" => {
-            "# How often to sample which draw-event objects are alive, in milliseconds.\n\
-             interval_ms = 1000\n\
-             # How many font ids to check for, listing those that exist. 0 skips.\n\
-             fonts = 64\n\
-             # Name of the output file, within the mod folder.\n\
-             file = draw-probe.md\n\
-             \n\
-             # advanced: for working on the diagnostic itself. Set these here; the\n\
-             # settings window does not show them.\n\
-             # The deliberate experiment: ONE read of a variable proven absent on one\n\
-             # instance, to learn whether the getter survives it. May end the session.\n\
-             absent_read = false\n\
-             # The instance and variable the experiment uses. The variable must exist in\n\
-             # the game's code but not on this object.\n\
-             absent_object = obj_main_menu\n\
-             absent_var = main_product\n"
-        }
-        "profiler" => {
-            "# How often to take a sample.\n\
-             interval_ms = 1\n\
-             # How many separate functions are listed in the report; heaviest first.\n\
-             top = 25\n\
-             # Report how long hiccups last.\n\
-             stalls = true\n\
-             # Stop sampling after this many seconds. 0 never stops.\n\
-             stop_after_s = 120\n"
-        }
         _ => "",
     }
 }
@@ -281,15 +210,14 @@ fn render_kit_head() -> String {
          # enable and configure them with manage-mods.py and configure.py. Nothing\n\
          # about those mods is set here.\n\
          #\n\
-         # What is here is the manager itself, and a handful of built-in developer\n\
-         # tools kept out of the way (all `hidden` below). A player has no reason to\n\
-         # edit this file.\n\
+         # What is here is the manager itself. A player has no reason to edit this\n\
+         # file.\n\
          #\n\
          # It is re-read while the game runs; press Ctrl+Alt+M in game to force a\n\
          # re-read and log what is on.\n\
          \n\
-         # The manager's own built-in tools. `hidden` means off and out of the\n\
-         # config window; set one to true to use it.\n\
+         # The features built into the manager itself, rather than downloaded as\n\
+         # mods. Off unless set to true.\n\
          [mods]\n",
     );
     for m in MODS {
@@ -594,15 +522,12 @@ mod tests {
         }
     }
 
-    /// A mod with no features would generate an empty file and puzzle a player --
-    /// except one still in construction, which is hidden precisely so nobody
-    /// meets it: no file is written for it and no tab is shown.
+    /// A mod with no features would generate an empty file and puzzle a player.
+    /// There is no longer a state that excuses one: a mod not ready to be met is
+    /// left out of the catalogue and the release, not listed here and suppressed.
     #[test]
-    fn every_visible_mod_has_at_least_one_feature() {
+    fn every_mod_has_at_least_one_feature() {
         for m in MODS {
-            if m.default == ModState::Hidden {
-                continue;
-            }
             assert!(!names_in(m.name).is_empty(), "{}: no features", m.name);
         }
     }
@@ -738,10 +663,11 @@ mod tests {
             let header = format!("# [{}.feature.{}]", f.module(), f.name());
             assert!(text.contains(&header), "{} is missing from the mirror", f.name());
         }
-        // and the keys, not just the headers (from the manager's own mods:
-        // optimization's popup_stutter_fix, and the diagnostics; the published mods
-        // are plugins now, and fast_boot/font_atlases are quarantined)
-        for key in ["steps", "interval_ms", "file"] {
+        // and the keys, not just the headers. Only the stutter fix is compiled in
+        // now -- the diagnostics are their own plugin, the published mods always
+        // were, and fast_boot/font_atlases are quarantined -- so `steps` is the
+        // whole set the mirror should carry.
+        for key in ["steps"] {
             assert!(text.contains(&format!("# {key} =")), "{key} is missing from the mirror");
         }
     }

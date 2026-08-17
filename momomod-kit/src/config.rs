@@ -261,17 +261,20 @@ pub fn legacy_path() -> Option<std::path::PathBuf> {
     home::file(LEGACY_FILE)
 }
 
-/// What `[mods]` in the kit's file says about one mod.
+/// What `[mods]` in the kit's file says about one mod: on, or off.
 ///
-/// `Hidden` is `Off` and then some: the mod is not loaded, and the config
-/// window shows neither its tab nor its row -- as if the kit did not have it.
-/// For mods still in construction, or not yet validated; a player finds one
-/// only by reading the file itself.
+/// There was a third state, `Hidden` -- off, and left out of the settings window
+/// as if the kit did not have it -- for mods still in construction. It is gone,
+/// because it answered a question the architecture now answers better and could
+/// answer wrongly. Whether someone can *have* a mod is decided by whether it is
+/// in the published catalogue and the release: an unfinished mod is simply not
+/// there, which no stale config line can contradict. `Hidden` only ever governed
+/// the manager's own compiled-in features, never the plugins it loads, so a
+/// plugin could run while the window insisted it did not exist.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ModState {
     On,
     Off,
-    Hidden,
 }
 
 impl std::fmt::Display for ModState {
@@ -281,7 +284,6 @@ impl std::fmt::Display for ModState {
         f.write_str(match self {
             ModState::On => "true",
             ModState::Off => "false",
-            ModState::Hidden => "hidden",
         })
     }
 }
@@ -329,8 +331,10 @@ impl ConfigSet {
     ///
     /// A mod switched off here is not configured, not checked and not started --
     /// its own file is left entirely alone, so switching it back on restores the
-    /// settings rather than resetting them. `hidden` is off and also left out of
-    /// the config window; see [`ModState`].
+    /// settings rather than resetting them.
+    ///
+    /// `hidden` is still accepted, and read as off. It was a third state once, and
+    /// a config someone wrote then must not start erroring at them now.
     pub fn mod_state(&self, module: &str, default: ModState) -> ModState {
         let key = module.to_ascii_lowercase();
         let section = self.kit.sections.get("mods").cloned().unwrap_or_default();
@@ -338,11 +342,10 @@ impl ConfigSet {
             None => default,
             Some(v) => match v.to_ascii_lowercase().as_str() {
                 "true" | "yes" | "on" | "1" => ModState::On,
-                "false" | "no" | "off" | "0" => ModState::Off,
-                "hidden" => ModState::Hidden,
+                "false" | "no" | "off" | "0" | "hidden" => ModState::Off,
                 other => {
                     logln!(
-                        "config: [mods] {key}: expected true, false or hidden, found \
+                        "config: [mods] {key}: expected true or false, found \
                          {other:?} - using the default ({default})"
                     );
                     default
@@ -351,7 +354,7 @@ impl ConfigSet {
         }
     }
 
-    /// Whether a mod is loaded at all. `false` covers both off and hidden.
+    /// Whether a mod is loaded at all.
     pub fn mod_enabled(&self, module: &str, default: bool) -> bool {
         let default = if default { ModState::On } else { ModState::Off };
         self.mod_state(module, default) == ModState::On
@@ -481,13 +484,13 @@ mod tests {
         assert!(c.enabled("x", true));
     }
 
-    /// `hidden` must switch a mod off whatever its default -- if it ever fell
-    /// through to the default like an unknown value does, a mod meant to be
-    /// invisible would quietly load.
+    /// `hidden` was a third state and is now a spelling of off. Someone's config
+    /// still says it, and it must keep switching the mod off rather than becoming
+    /// an unknown value that falls through to a default of on.
     #[test]
-    fn a_hidden_mod_is_off_whatever_the_default() {
+    fn the_retired_hidden_state_still_reads_as_off() {
         let set = ConfigSet::new(Config::parse("[mods]\noptimization = hidden\n"));
-        assert_eq!(set.mod_state("optimization", ModState::On), ModState::Hidden);
+        assert_eq!(set.mod_state("optimization", ModState::On), ModState::Off);
         assert!(!set.mod_enabled("optimization", true));
         assert!(!set.enabled("optimization", "popup_stutter_fix", true));
     }
@@ -496,7 +499,7 @@ mod tests {
     /// generated `[mods]` line would not mean what the default meant.
     #[test]
     fn mod_states_round_trip_through_the_file() {
-        for state in [ModState::On, ModState::Off, ModState::Hidden] {
+        for state in [ModState::On, ModState::Off] {
             let other = if state == ModState::On { ModState::Off } else { ModState::On };
             let set = ConfigSet::new(Config::parse(&format!("[mods]\nx = {state}\n")));
             assert_eq!(set.mod_state("x", other), state, "{state} did not round-trip");
@@ -508,7 +511,7 @@ mod tests {
     #[test]
     fn a_bad_mod_state_falls_back_to_the_default() {
         let set = ConfigSet::new(Config::parse("[mods]\noptimization = maybe\n"));
-        assert_eq!(set.mod_state("optimization", ModState::Hidden), ModState::Hidden);
+        assert_eq!(set.mod_state("optimization", ModState::Off), ModState::Off);
         assert_eq!(set.mod_state("optimization", ModState::On), ModState::On);
     }
 

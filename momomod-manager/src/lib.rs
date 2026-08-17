@@ -500,17 +500,13 @@ fn reload_config(rt: &Runtime, force: bool) {
             );
             m.name
         };
-        match set.mod_state(listed_as, m.default) {
-            config::ModState::On => {}
-            state => {
-                let how = if state == config::ModState::Hidden {
-                    "hidden"
-                } else {
-                    "switched off"
-                };
-                logln!("config: mod {:?} is {how} - {} feature(s) not loaded.", m.name, mine.len());
-                continue;
-            }
+        if set.mod_state(listed_as, m.default) != config::ModState::On {
+            logln!(
+                "config: mod {:?} is switched off - {} feature(s) not loaded.",
+                m.name,
+                mine.len()
+            );
+            continue;
         }
         let file = config::mod_file(m.name);
         // A self-configuring mod's file is not in the kit's dialect and is not the

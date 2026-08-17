@@ -73,8 +73,8 @@ use tkiw_runtime::{
     Runtime,
 };
 
-use crate::config::Section;
-use crate::feature::{Cadence, Feature, Requirements};
+use momomod_kit::config::Section;
+use momomod_kit::feature::{Cadence, Feature, Requirements};
 
 /// The phases worth telling apart, most specific first: during a run the menu's
 /// controller may still exist, and the innermost thing the player is in is the answer.
@@ -257,6 +257,17 @@ impl Feature for Profiler {
     fn summary(&self) -> &'static str {
         "Logs which processes in the game consume how much time. Unsuitable for \
          regular gameplay."
+    }
+
+    fn config_template(&self) -> &'static str {
+        "# How often to take a sample.\n\
+         interval_ms = 1\n\
+         # How many separate functions are listed in the report; heaviest first.\n\
+         top = 25\n\
+         # Report how long hiccups last.\n\
+         stalls = true\n\
+         # Stop sampling after this many seconds. 0 never stops.\n\
+         stop_after_s = 120\n"
     }
 
     fn requires(&self) -> Requirements {
@@ -724,9 +735,9 @@ mod tests {
     #[test]
     fn config_is_validated() {
         let mut p = Profiler::default();
-        let cfg = crate::config::Config::parse("[feature.profiler]\ninterval_ms = 0\n");
+        let cfg = momomod_kit::config::Config::parse("[feature.profiler]\ninterval_ms = 0\n");
         assert!(p.configure(&cfg.section("profiler")).is_err());
-        let cfg = crate::config::Config::parse("[feature.profiler]\ntop = 60\nstalls = false\n");
+        let cfg = momomod_kit::config::Config::parse("[feature.profiler]\ntop = 60\nstalls = false\n");
         assert!(p.configure(&cfg.section("profiler")).is_ok());
         assert_eq!(p.top, 60);
         assert!(!p.stalls);

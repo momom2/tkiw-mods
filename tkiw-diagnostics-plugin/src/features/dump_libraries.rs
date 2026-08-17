@@ -37,8 +37,8 @@ use std::collections::BTreeMap;
 
 use tkiw_runtime::{builtin, dslist, findln, logln, rvalue, rvalue::Value, Runtime};
 
-use crate::config::Section;
-use crate::feature::{Cadence, Feature, Requirements};
+use momomod_kit::config::Section;
+use momomod_kit::feature::{Cadence, Feature, Requirements};
 
 /// The globals to walk. Each is a `ds_map` keyed by system name.
 const LIBRARIES: &[&str] = &[
@@ -232,6 +232,11 @@ impl Feature for DumpLibraries {
          upgrades) to a JSON file, once, then switches itself off."
     }
 
+    fn config_template(&self) -> &'static str {
+        "# Name of the output file, within the mod folder.\n\
+         file = libraries.json\n"
+    }
+
     fn requires(&self) -> Requirements {
         // Only by-name variables: the library globals themselves. Everything else this
         // feature uses is already covered by the shared runtime's core guard.
@@ -384,7 +389,7 @@ mod tests {
     #[test]
     fn the_output_filename_must_be_bare() {
         let mut f = DumpLibraries::default();
-        let cfg = crate::config::Config::parse("[feature.dump_libraries]\nfile = ../evil.json\n");
+        let cfg = momomod_kit::config::Config::parse("[feature.dump_libraries]\nfile = ../evil.json\n");
         assert!(f.configure(&cfg.section("dump_libraries")).is_err());
     }
 }

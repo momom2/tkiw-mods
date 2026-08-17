@@ -44,8 +44,8 @@ use std::time::{Duration, Instant};
 
 use tkiw_runtime::{instance, logln, Runtime};
 
-use crate::config::Section;
-use crate::feature::{Cadence, Feature, Requirements};
+use momomod_kit::config::Section;
+use momomod_kit::feature::{Cadence, Feature, Requirements};
 
 /// The objects whose presence marks a phase, in the order they appear in a launch.
 ///
@@ -155,6 +155,11 @@ impl Feature for Timeline {
 
     fn summary(&self) -> &'static str {
         "Periodically check which phase the game is in. Logs how long each one lasts."
+    }
+
+    fn config_template(&self) -> &'static str {
+        "# Period of the check. Precision of the timeline. Each check costs ~2ms.\n\
+         interval_ms = 500\n"
     }
 
     fn requires(&self) -> Requirements {

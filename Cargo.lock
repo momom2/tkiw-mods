@@ -29,6 +29,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tkiw_diagnostics_plugin"
+version = "0.1.0"
+dependencies = [
+ "momomod_kit",
+ "tkiw_plugin",
+ "tkiw_runtime",
+]
+
+[[package]]
 name = "tkiw_gameplay_plugin"
 version = "0.1.0"
 dependencies = [
